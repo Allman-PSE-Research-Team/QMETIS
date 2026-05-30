@@ -32,10 +32,12 @@ The top-level Makefile is a proxy that translates options into CMake flags and r
 ## Testing
 
 There is no integrated test suite. Test manually using the CLI programs against sample graphs in `graphs/`:
+Test for 10, 50, and 100 partitions.
+Use the @cit-Patents.metis and @mdual.graph files for benchmarking.
 
 ```bash
-./build/programs/gpmetis graphs/4elt.graph 4      # partition graph into 4 parts
-./build/programs/ndmetis graphs/4elt.graph         # nested dissection ordering
+./build/programs/gpmetis graphs/mdual.graph 4      # partition graph into 4 parts
+./build/programs/ndmetis graphs/mdual.graph        # nested dissection ordering
 ./build/programs/mpmetis graphs/metis.mesh 4       # mesh partitioning
 ./build/programs/graphchk graphs/4elt.graph        # validate graph file
 ```
