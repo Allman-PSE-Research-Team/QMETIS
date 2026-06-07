@@ -64,3 +64,6 @@ GKlib
 .aijournal/
 .aisources/
 
+# macOS Finder droppings
+.DS_Store
+
