@@ -248,7 +248,7 @@ idx_t Match_RM(ctrl_t *ctrl, graph_t *graph)
       }
 
       if (maxidx != UNMATCHED) {
-        cmap[i]  = cmap[maxidx] = cnvtxs++;
+        cnvtxs++;  /* cmap[] is (re)assigned in the renumbering pass below */
         match[i] = maxidx;
         match[maxidx] = i;
       }
@@ -394,7 +394,7 @@ idx_t Match_SHEM(ctrl_t *ctrl, graph_t *graph)
       }
 
       if (maxidx != UNMATCHED) {
-        cmap[i]  = cmap[maxidx] = cnvtxs++;
+        cnvtxs++;  /* cmap[] is (re)assigned in the renumbering pass below */
         match[i] = maxidx;
         match[maxidx] = i;
       }
@@ -507,7 +507,7 @@ idx_t Match_2HopAny(ctrl_t *ctrl, graph_t *graph, idx_t *perm, idx_t *match,
       if (match[rowind[j]] == UNMATCHED) {
         for (jj--; jj>j; jj--) {
           if (match[rowind[jj]] == UNMATCHED) {
-            cmap[rowind[j]] = cmap[rowind[jj]] = cnvtxs++;
+            cnvtxs++;  /* cmap[] is assigned in the renumbering pass in the caller */
             match[rowind[j]]  = rowind[jj];
             match[rowind[jj]] = rowind[j];
             nunmatched -= 2;
@@ -598,7 +598,7 @@ idx_t Match_2HopAll(ctrl_t *ctrl, graph_t *graph, idx_t *perm, idx_t *match,
           break;
       }
       if (jj == xadj[k+1]) {
-        cmap[i] = cmap[k] = cnvtxs++;
+        cnvtxs++;  /* cmap[] is assigned in the renumbering pass in the caller */
         match[i] = k;
         match[k] = i;
         nunmatched -= 2;
@@ -770,7 +770,7 @@ idx_t Match_JC(ctrl_t *ctrl, graph_t *graph)
       }
 
       if (maxidx != UNMATCHED) {
-        cmap[i]  = cmap[maxidx] = cnvtxs++;
+        cnvtxs++;  /* cmap[] is (re)assigned in the renumbering pass below */
         match[i] = maxidx;
         match[maxidx] = i;
       }
