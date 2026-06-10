@@ -62,7 +62,10 @@ void AllocateRefinementWorkSpace(ctrl_t *ctrl, idx_t nbrpoolsize_max, idx_t nbrp
   }
 
 
-  /* T2.7: precomputed sqrt table for the k-way cut gain priority (idx in [0,nparts]) */
+  /* Build the cnbrsqrt[] lookup table that replaces sqrt(nnbrs) in the k-way cut
+     gain priority (see struct.h for the full rationale). nnbrs is in [0,nparts], so
+     a table of nparts+1 doubles covers every index. Kept in double precision so the
+     ed/sqrt(nnbrs) division reproduces the inline-sqrt result bit-for-bit. */
   {
     idx_t i;
     ctrl->cnbrsqrt = (double *)gk_malloc((ctrl->nparts+1)*sizeof(double),

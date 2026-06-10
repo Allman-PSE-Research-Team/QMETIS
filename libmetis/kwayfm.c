@@ -184,7 +184,9 @@ void Greedy_KWayCutOptimize(ctrl_t *ctrl, graph_t *graph, idx_t niter,
     irandArrayPermute(nbnd, perm, nbnd/4, 1);
     for (ii=0; ii<nbnd; ii++) {
       i = bndind[perm[ii]];
-      rgain = (graph->ckrinfo[i].nnbrs > 0 ? 
+      /* gain key ed/sqrt(nnbrs)-id; cnbrsqrt[] is the precomputed-sqrt table that
+         replaces libm sqrt() here and in UpdateQueueInfo (see struct.h: cnbrsqrt). */
+      rgain = (graph->ckrinfo[i].nnbrs > 0 ?
                1.0*graph->ckrinfo[i].ed/ctrl->cnbrsqrt[graph->ckrinfo[i].nnbrs] : 0.0)
                - graph->ckrinfo[i].id;
       rpqInsert(queue, i, rgain);
@@ -844,7 +846,9 @@ void Greedy_McKWayCutOptimize(ctrl_t *ctrl, graph_t *graph, idx_t niter,
     irandArrayPermute(nbnd, perm, nbnd/4, 1);
     for (ii=0; ii<nbnd; ii++) {
       i = bndind[perm[ii]];
-      rgain = (graph->ckrinfo[i].nnbrs > 0 ? 
+      /* gain key ed/sqrt(nnbrs)-id; cnbrsqrt[] is the precomputed-sqrt table that
+         replaces libm sqrt() here and in UpdateQueueInfo (see struct.h: cnbrsqrt). */
+      rgain = (graph->ckrinfo[i].nnbrs > 0 ?
                1.0*graph->ckrinfo[i].ed/ctrl->cnbrsqrt[graph->ckrinfo[i].nnbrs] : 0.0)
                - graph->ckrinfo[i].id;
       rpqInsert(queue, i, rgain);
