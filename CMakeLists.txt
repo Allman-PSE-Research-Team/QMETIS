@@ -4,6 +4,18 @@ project(METIS C)
 include(GNUInstallDirs)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# T3.1: enable link-time / interprocedural optimization when the toolchain
+# supports it. Lets the hot k-way/FM refinement loops inline the rpq* priority
+# queue ops (instantiated in libmetis/gklib.c) across translation units.
+include(CheckIPOSupported)
+check_ipo_supported(RESULT METIS_IPO_SUPPORTED OUTPUT METIS_IPO_MSG)
+if(METIS_IPO_SUPPORTED)
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+  message(STATUS "METIS: interprocedural optimization (LTO) enabled")
+else()
+  message(STATUS "METIS: IPO/LTO not supported: ${METIS_IPO_MSG}")
+endif()
 set(SHARED FALSE CACHE BOOL "build a shared library")
 
 if(MSVC)
