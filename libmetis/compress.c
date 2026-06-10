@@ -29,6 +29,7 @@ graph_t *CompressGraph(ctrl_t *ctrl, idx_t nvtxs, idx_t *xadj, idx_t *adjncy,
   idx_t *cxadj, *cadjncy, *cvwgt, *mark, *map;
   ikv_t *keys;
   graph_t *graph=NULL;
+  int aborted=0;   /* set if the grouping scan stops early (graph incompressible) */
 
   mark = ismalloc(nvtxs, -1, "CompressGraph: mark");
   map  = ismalloc(nvtxs, -1, "CompressGraph: map");
@@ -79,14 +80,25 @@ graph_t *CompressGraph(ctrl_t *ctrl, idx_t nvtxs, idx_t *xadj, idx_t *adjncy,
 
       /* cnvtxs only grows, so once it reaches the rejection threshold the graph
          is provably incompressible; stop the (verification-heavy) scan early.
-         Same predicate as the post-loop test, so the decision is unchanged. */
-      if (cnvtxs >= COMPRESSION_FRACTION*nvtxs)
+         Same predicate as the post-loop test, so the accept/reject decision and
+         all output are unchanged -- only the reject-path group count stops short. */
+      if (cnvtxs >= COMPRESSION_FRACTION*nvtxs) {
+        aborted = 1;
         break;
+      }
     }
   }
 
+  /* When the scan aborted early, cnvtxs is only a partial group count (the true
+     final count would be larger), so nvtxs-cnvtxs OVERSTATES the reduction -- it is
+     an upper bound, not the exact value. We mark it with '~' rather than scanning
+     on to make it exact, since the graph is being rejected as incompressible either
+     way. On the accept path the scan always runs to completion, so cnvtxs (and this
+     figure) is exact. */
   IFSET(ctrl->dbglvl, METIS_DBG_INFO,
-        printf("  Compression: reduction in # of vertices: %"PRIDX".\n", nvtxs-cnvtxs)); 
+        printf("  Compression: reduction in # of vertices: %s%"PRIDX"%s.\n",
+               (aborted ? "<=" : ""), nvtxs-cnvtxs,
+               (aborted ? " (approx; incompressible, scan stopped early)" : "")));
 
 
   if (cnvtxs < COMPRESSION_FRACTION*nvtxs) {
