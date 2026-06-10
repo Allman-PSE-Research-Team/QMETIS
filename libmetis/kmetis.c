@@ -125,10 +125,7 @@ idx_t MlevelKWayPartitioning(ctrl_t *ctrl, graph_t *graph, idx_t *part)
 
     /* Re-allocate the work space */
     AllocateWorkSpace(ctrl, graph);
-    /* T2.5: presize the neighbor pool to its upper bound (graph->nedges) so the
-       per-level cnbrpoolGetNext growth reallocs (each copying the whole live
-       pool) are eliminated. Pool contents/indices are unchanged. */
-    AllocateRefinementWorkSpace(ctrl, graph->nedges, graph->nedges);
+    AllocateRefinementWorkSpace(ctrl, graph->nedges, 2*cgraph->nedges);
 
     IFSET(ctrl->dbglvl, METIS_DBG_TIME, gk_stopcputimer(ctrl->InitPartTmr));
     IFSET(ctrl->dbglvl, METIS_DBG_IPART, 
