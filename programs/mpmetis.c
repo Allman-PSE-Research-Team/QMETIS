@@ -175,8 +175,12 @@ void MPReportResults(params_t *params, mesh_t *mesh, idx_t *epart, idx_t *npart,
 
   /* ComputePartitionInfo(params, graph, part); */
 
-  printf(" - %s: %"PRIDX".\n\n", 
-      (params->objtype == METIS_OBJTYPE_CUT ? "Edgecut" : "Volume"), objval);
+  if (params->objtype == METIS_OBJTYPE_MOD)
+    printf(" - Modularity: %.6"PRREAL" (scaled objval: %"PRIDX").\n\n",
+        (real_t)objval/METIS_MODULARITY_SCALE, objval);
+  else
+    printf(" - %s: %"PRIDX".\n\n", 
+        (params->objtype == METIS_OBJTYPE_CUT ? "Edgecut" : "Volume"), objval);
 
   gk_stopcputimer(params->reporttimer);
 

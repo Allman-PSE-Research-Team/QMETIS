@@ -48,6 +48,7 @@ void AllocateRefinementWorkSpace(ctrl_t *ctrl, idx_t nbrpoolsize_max, idx_t nbrp
 
   switch (ctrl->objtype) {
     case METIS_OBJTYPE_CUT:
+    case METIS_OBJTYPE_MOD:
       ctrl->cnbrpool = (cnbr_t *)gk_malloc(ctrl->nbrpoolsize*sizeof(cnbr_t), 
                              "AllocateRefinementWorkSpace: cnbrpool");
       break;

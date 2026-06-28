@@ -79,6 +79,75 @@ idx_t ComputeVolume(graph_t *graph, idx_t *where)
 
 
 /*************************************************************************/
+/*! Scales modularity for the idx_t objval public API. */
+/*************************************************************************/
+idx_t ScaleModularityObjective(real_t modularity)
+{
+  double scaled;
+
+  scaled = (double)modularity*(double)METIS_MODULARITY_SCALE;
+  return (idx_t)(scaled >= 0.0 ? scaled + 0.5 : scaled - 0.5);
+}
+
+
+/*************************************************************************/
+/*! This function computes Newman-Girvan modularity for a partition. */
+/*************************************************************************/
+real_t ComputeModularity(graph_t *graph, idx_t nparts, idx_t *where)
+{
+  idx_t i, j, me, other, ewgt;
+  idx_t *xadj, *adjncy, *adjwgt, *pdeg;
+  double totaladjwgt, internaladjwgt, expected;
+  real_t modularity;
+
+  if (nparts <= 0)
+    return 0.0;
+
+  xadj   = graph->xadj;
+  adjncy = graph->adjncy;
+  adjwgt = graph->adjwgt;
+
+  pdeg = ismalloc(nparts, 0, "ComputeModularity: pdeg");
+
+  totaladjwgt = internaladjwgt = 0.0;
+  for (i=0; i<graph->nvtxs; i++) {
+    me = where[i];
+    ASSERT(me >= 0 && me < nparts);
+    for (j=xadj[i]; j<xadj[i+1]; j++) {
+      other = where[adjncy[j]];
+      ewgt  = (adjwgt ? adjwgt[j] : 1);
+      totaladjwgt += (double)ewgt;
+      pdeg[me] += ewgt;
+      if (me == other)
+        internaladjwgt += (double)ewgt;
+    }
+  }
+
+  modularity = 0.0;
+  if (totaladjwgt > 0.0) {
+    expected = 0.0;
+    for (i=0; i<nparts; i++)
+      expected += (double)pdeg[i]*(double)pdeg[i];
+    modularity = (real_t)(internaladjwgt/totaladjwgt -
+        expected/(totaladjwgt*totaladjwgt));
+  }
+
+  gk_free((void **)&pdeg, LTERM);
+
+  return modularity;
+}
+
+
+/*************************************************************************/
+/*! This function computes the scaled modularity objective value. */
+/*************************************************************************/
+idx_t ComputeModularityObjective(graph_t *graph, idx_t nparts, idx_t *where)
+{
+  return ScaleModularityObjective(ComputeModularity(graph, nparts, where));
+}
+
+
+/*************************************************************************/
 /*! This function computes the cut given the graph and a where vector 
  */
 /*************************************************************************/

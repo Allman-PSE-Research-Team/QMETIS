@@ -102,7 +102,9 @@ typedef struct graph_t {
 
   /* Partition parameters */
   idx_t mincut, minvol;
-  idx_t *where, *pwgts;
+  real_t modularity;
+  idx_t totaladjwgt;
+  idx_t *where, *pwgts, *pdeg;
   idx_t nbnd;
   idx_t *bndptr, *bndind;
 

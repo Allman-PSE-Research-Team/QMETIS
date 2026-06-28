@@ -142,6 +142,10 @@ idx_t MlevelKWayPartitioning(ctrl_t *ctrl, graph_t *graph, idx_t *part)
         curobj = graph->minvol;
         break;
 
+      case METIS_OBJTYPE_MOD:
+        curobj = ScaleModularityObjective(graph->modularity);
+        break;
+
       default:
         gk_errexit(SIGERR, "Unknown objtype: %d\n", ctrl->objtype);
     }
@@ -149,7 +153,8 @@ idx_t MlevelKWayPartitioning(ctrl_t *ctrl, graph_t *graph, idx_t *part)
     curbal = ComputeLoadImbalanceDiff(graph, ctrl->nparts, ctrl->pijbm, ctrl->ubfactors);
 
     if (i == 0 
-        || (curbal <= 0.0005 && bestobj > curobj)
+        || (curbal <= 0.0005 &&
+            (ctrl->objtype == METIS_OBJTYPE_MOD ? bestobj < curobj : bestobj > curobj))
         || (bestbal > 0.0005 && curbal < bestbal)) {
       icopy(graph->nvtxs, graph->where, part);
       bestobj = curobj;
@@ -158,7 +163,7 @@ idx_t MlevelKWayPartitioning(ctrl_t *ctrl, graph_t *graph, idx_t *part)
 
     FreeRData(graph);
 
-    if (bestobj == 0)
+    if (ctrl->objtype != METIS_OBJTYPE_MOD && bestobj == 0)
       break;
   }
 
@@ -196,6 +201,7 @@ void InitKWayPartitioning(ctrl_t *ctrl, graph_t *graph)
   switch (ctrl->objtype) {
     case METIS_OBJTYPE_CUT:
     case METIS_OBJTYPE_VOL:
+    case METIS_OBJTYPE_MOD:
       options[METIS_OPTION_NCUTS] = ctrl->nIparts;
       status = METIS_PartGraphRecursive(&graph->nvtxs, &graph->ncon, 
                    graph->xadj, graph->adjncy, graph->vwgt, graph->vsize, 
@@ -320,7 +326,8 @@ idx_t BlockKWayPartitioning(ctrl_t *ctrl, graph_t *graph, idx_t *part)
 
   WCOREPOP;
 
-  return ComputeCut(graph, part);
+  return (ctrl->objtype == METIS_OBJTYPE_MOD ?
+      ComputeModularityObjective(graph, ctrl->nparts, part) : ComputeCut(graph, part));
 }
 
 

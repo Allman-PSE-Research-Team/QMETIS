@@ -185,6 +185,8 @@ void InitGraph(graph_t *graph)
   graph->ncon      = -1;
   graph->mincut    = -1;
   graph->minvol    = -1;
+  graph->modularity = 0.0;
+  graph->totaladjwgt = 0;
   graph->nbnd      = -1;
 
   /* memory for the graph structure */
@@ -209,6 +211,7 @@ void InitGraph(graph_t *graph)
   /* memory for the partition/refinement structure */
   graph->where     = NULL;
   graph->pwgts     = NULL;
+  graph->pdeg      = NULL;
   graph->id        = NULL;
   graph->ed        = NULL;
   graph->bndptr    = NULL;
@@ -258,7 +261,7 @@ void FreeRData(graph_t *graph)
   /* free partition/refinement structure */
   gk_free((void **)&graph->where, &graph->pwgts, &graph->id, &graph->ed, 
       &graph->bndptr, &graph->bndind, &graph->nrinfo, &graph->ckrinfo, 
-      &graph->vkrinfo, LTERM);
+      &graph->vkrinfo, &graph->pdeg, LTERM);
 }
 
 

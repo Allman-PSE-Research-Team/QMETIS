@@ -63,6 +63,8 @@ static gk_StringMap_t ptype_options[] = {
 static gk_StringMap_t objtype_options[] = {
  {"cut",                METIS_OBJTYPE_CUT},
  {"vol",                METIS_OBJTYPE_VOL},
+ {"mod",                METIS_OBJTYPE_MOD},
+ {"modularity",         METIS_OBJTYPE_MOD},
  {NULL,                 0}
 };
 
@@ -123,7 +125,8 @@ static char helpstr[][100] =
 "  -objtype=string [applies only when -ptype=kway]",
 "     Specifies the objective that the partitioning routines will optimize.",
 "     The possible values are:",
-"        cut      - Minimize the edgecut [default]",
+"        mod      - Maximize Newman-Girvan modularity [default]",
+"        cut      - Minimize the edgecut",
 "        vol      - Minimize the total communication volume",
 " ",
 /*
@@ -188,8 +191,8 @@ static char helpstr[][100] =
 " ",
 "  -ncuts=int",
 "     Specifies the number of different partitionings that it will compute.",
-"     The final partitioning is the one that achieves the best edgecut or",
-"     communication volume. Default is 1.",
+"     The final partitioning is the one that achieves the best modularity,",
+"     edgecut, or communication volume for the selected objective. Default is 1.",
 " ",
 "  -ondisk",
 "     Specifies if graphs will be stored to disk during coarsening in order",
@@ -239,7 +242,7 @@ params_t *parse_cmdline(int argc, char *argv[])
 
   /* initialize the params data structure */
   params->ptype         = METIS_PTYPE_KWAY;
-  params->objtype       = METIS_OBJTYPE_CUT;
+  params->objtype       = -1;
   params->ctype         = METIS_CTYPE_SHEM;
   params->iptype        = -1;
   params->rtype         = -1;
@@ -398,9 +401,11 @@ params_t *parse_cmdline(int argc, char *argv[])
 
   /* Set the ptype-specific defaults */
   if (params->ptype == METIS_PTYPE_RB) {
+    params->objtype = (params->objtype != -1 ? params->objtype : METIS_OBJTYPE_CUT);
     params->rtype   = METIS_RTYPE_FM;
   }
   if (params->ptype == METIS_PTYPE_KWAY) {
+    params->objtype = (params->objtype != -1 ? params->objtype : METIS_OBJTYPE_MOD);
     params->iptype = (params->iptype != -1 ? params->iptype : METIS_IPTYPE_METISRB);
     params->rtype  = METIS_RTYPE_GREEDY;
   }
@@ -411,8 +416,8 @@ params_t *parse_cmdline(int argc, char *argv[])
       errexit("***The -contig option cannot be specified with rb partitioning. Will be ignored.\n");
     if (params->minconn)
       errexit("***The -minconn option cannot be specified with rb partitioning. Will be ignored. \n");
-    if (params->objtype == METIS_OBJTYPE_VOL)
-      errexit("The -objtype=vol option cannot be specified with rb partitioning.\n");
+    if (params->objtype != METIS_OBJTYPE_CUT)
+      errexit("Only -objtype=cut can be specified with rb partitioning.\n");
   }
 
   return params;

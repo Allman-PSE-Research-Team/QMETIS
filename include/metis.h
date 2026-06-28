@@ -162,6 +162,9 @@ typedef __int64 int64_t;
 /* The maximum length of the options[] array */
 #define METIS_NOPTIONS          40
 
+/* Modularity is returned through idx_t objval as Q*METIS_MODULARITY_SCALE. */
+#define METIS_MODULARITY_SCALE  1000000
+
 
 
 /*------------------------------------------------------------------------
@@ -352,7 +355,8 @@ typedef enum {
 typedef enum {
   METIS_OBJTYPE_CUT,
   METIS_OBJTYPE_VOL,
-  METIS_OBJTYPE_NODE
+  METIS_OBJTYPE_NODE,
+  METIS_OBJTYPE_MOD
 } mobjtype_et;
 
 

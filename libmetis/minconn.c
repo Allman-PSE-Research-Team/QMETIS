@@ -42,6 +42,7 @@ void ComputeSubDomainGraph(ctrl_t *ctrl, graph_t *graph)
   for (pid=0; pid<nparts; pid++) {
     switch (ctrl->objtype) {
       case METIS_OBJTYPE_CUT:
+      case METIS_OBJTYPE_MOD:
         {
           ckrinfo_t *rinfo;
           cnbr_t *nbrs;
@@ -446,6 +447,7 @@ void EliminateSubDomainEdges(ctrl_t *ctrl, graph_t *graph)
       if (target != -1) {
         switch (ctrl->objtype) {
           case METIS_OBJTYPE_CUT:
+          case METIS_OBJTYPE_MOD:
             MoveGroupMinConnForCut(ctrl, graph, target, nind, ind);
             break;
           case METIS_OBJTYPE_VOL:

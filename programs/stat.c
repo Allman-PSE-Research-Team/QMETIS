@@ -36,8 +36,9 @@ void ComputePartitionInfo(params_t *params, graph_t *graph, idx_t *where)
   tpwgts = params->tpwgts;
 
   /* Compute objective-related information */
-  printf(" - Edgecut: %"PRIDX", communication volume: %"PRIDX".\n\n", 
-      ComputeCut(graph, where), ComputeVolume(graph, where));
+  printf(" - Edgecut: %"PRIDX", communication volume: %"PRIDX", modularity: %.6"PRREAL".\n\n", 
+      ComputeCut(graph, where), ComputeVolume(graph, where),
+      ComputeModularity(graph, nparts, where));
 
 
   /* Compute constraint-related information */

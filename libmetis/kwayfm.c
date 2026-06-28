@@ -12,6 +12,88 @@
 
 
 
+static real_t KWayModularityMoveGain(graph_t *graph, idx_t from, idx_t to,
+         idx_t id, idx_t vdeg, idx_t toed)
+{
+  double totaladjwgt;
+
+  totaladjwgt = (double)graph->totaladjwgt;
+  if (totaladjwgt <= 0.0)
+    return 0.0;
+
+  return (real_t)(2.0*((double)toed-(double)id)/totaladjwgt -
+      (2.0*(double)vdeg*((double)graph->pdeg[to]-(double)graph->pdeg[from]) +
+       2.0*(double)vdeg*(double)vdeg)/(totaladjwgt*totaladjwgt));
+}
+
+
+static real_t KWayModularityVertexGain(ctrl_t *ctrl, graph_t *graph, idx_t i)
+{
+  idx_t k, from, vdeg;
+  real_t gain, bestgain;
+  ckrinfo_t *myrinfo;
+  cnbr_t *mynbrs;
+
+  if (graph->totaladjwgt <= 0)
+    return 0.0;
+
+  myrinfo = graph->ckrinfo+i;
+  if (myrinfo->nnbrs <= 0 || myrinfo->inbr == -1)
+    return -REAL_MAX;
+
+  from     = graph->where[i];
+  vdeg     = myrinfo->id + myrinfo->ed;
+  mynbrs   = ctrl->cnbrpool + myrinfo->inbr;
+  bestgain = -REAL_MAX;
+
+  for (k=0; k<myrinfo->nnbrs; k++) {
+    gain = KWayModularityMoveGain(graph, from, mynbrs[k].pid, myrinfo->id,
+               vdeg, mynbrs[k].ed);
+    if (gain > bestgain)
+      bestgain = gain;
+  }
+
+  return bestgain;
+}
+
+
+static void UpdateModularityQueueInfo(ctrl_t *ctrl, graph_t *graph,
+         rpq_t *queue, idx_t *vstatus, idx_t vid, idx_t me, idx_t from,
+         idx_t to, ckrinfo_t *myrinfo, idx_t oldnnbrs, idx_t *r_nupd,
+         idx_t *updptr, idx_t *updind)
+{
+  real_t rgain;
+
+  (void)me;
+  (void)from;
+  (void)to;
+  (void)oldnnbrs;
+
+  rgain = KWayModularityVertexGain(ctrl, graph, vid);
+
+  if (vstatus[vid] == VPQSTATUS_PRESENT) {
+    if (myrinfo->ed > 0) {
+      rpqUpdate(queue, vid, rgain);
+    }
+    else {
+      rpqDelete(queue, vid);
+      vstatus[vid] = VPQSTATUS_NOTPRESENT;
+      ListDelete((*r_nupd), updind, updptr, vid);
+    }
+  }
+  else if (vstatus[vid] == VPQSTATUS_NOTPRESENT && myrinfo->ed > 0) {
+    rpqInsert(queue, vid, rgain);
+    vstatus[vid] = VPQSTATUS_PRESENT;
+    ListInsert((*r_nupd), updind, updptr, vid);
+  }
+}
+
+
+static void Greedy_KWayModularityOptimize(ctrl_t *ctrl, graph_t *graph,
+         idx_t niter, real_t ffactor, idx_t omode);
+
+
+
 /*************************************************************************/
 /* Top-level routine for k-way partitioning refinement. This routine just
    calls the appropriate refinement routine based on the objectives and
@@ -35,9 +117,277 @@ void Greedy_KWayOptimize(ctrl_t *ctrl, graph_t *graph, idx_t niter,
         Greedy_McKWayVolOptimize(ctrl, graph, niter, ffactor, omode);
       break;
 
+    case METIS_OBJTYPE_MOD:
+      Greedy_KWayModularityOptimize(ctrl, graph, niter, ffactor, omode);
+      break;
+
     default:
       gk_errexit(SIGERR, "Unknown objtype of %d\n", ctrl->objtype);
   }
+}
+
+
+
+/*************************************************************************/
+/*! K-way refinement that maximizes Newman-Girvan modularity while preserving
+    the existing k-way balance, contiguity, and minconn move constraints. */
+/**************************************************************************/
+static void Greedy_KWayModularityOptimize(ctrl_t *ctrl, graph_t *graph,
+         idx_t niter, real_t ffactor, idx_t omode)
+{
+  idx_t i, ii, iii, j, k, pass, nvtxs, ncon, nparts;
+  idx_t from, me, to, cto, oldnnbrs, nbnd, vdeg;
+  idx_t *xadj, *adjncy, *adjwgt, *vwgt;
+  idx_t *where, *pwgts, *perm, *bndptr, *bndind, *minpwgts, *maxpwgts;
+  idx_t nmoved, nupd, *vstatus, *updptr, *updind;
+  idx_t maxndoms, *safetos=NULL, *nads=NULL, *doms=NULL, **adids=NULL, **adwgts=NULL;
+  idx_t *bfslvl=NULL, *bfsind=NULL, *bfsmrk=NULL;
+  idx_t bndtype = BNDTYPE_BALANCE;
+  real_t *ubfactors, *pijbm, origbal;
+  real_t rgain, gain, bestgain, oldmod;
+  rpq_t *queue;
+  ckrinfo_t *myrinfo;
+  cnbr_t *mynbrs;
+
+  ffactor = 0.0;
+  WCOREPUSH;
+
+  nvtxs  = graph->nvtxs;
+  ncon   = graph->ncon;
+  xadj   = graph->xadj;
+  adjncy = graph->adjncy;
+  adjwgt = graph->adjwgt;
+  vwgt   = graph->vwgt;
+
+  bndind = graph->bndind;
+  bndptr = graph->bndptr;
+  where  = graph->where;
+  pwgts  = graph->pwgts;
+
+  nparts = ctrl->nparts;
+  pijbm  = ctrl->pijbm;
+
+  ubfactors = rwspacemalloc(ctrl, ncon);
+  ComputeLoadImbalanceVec(graph, nparts, pijbm, ubfactors);
+  origbal = rvecmaxdiff(ncon, ubfactors, ctrl->ubfactors);
+  if (omode == OMODE_BALANCE) {
+    rcopy(ncon, ctrl->ubfactors, ubfactors);
+  }
+  else {
+    for (i=0; i<ncon; i++)
+      ubfactors[i] = (ubfactors[i] > ctrl->ubfactors[i] ? ubfactors[i] : ctrl->ubfactors[i]);
+  }
+
+  minpwgts = iwspacemalloc(ctrl, nparts*ncon);
+  maxpwgts = iwspacemalloc(ctrl, nparts*ncon);
+
+  for (i=0; i<nparts; i++) {
+    for (j=0; j<ncon; j++) {
+      maxpwgts[i*ncon+j] = ctrl->tpwgts[i*ncon+j]*graph->tvwgt[j]*ubfactors[j];
+      minpwgts[i*ncon+j] = ctrl->tpwgts[i*ncon+j]*graph->tvwgt[j]*
+                           (ncon == 1 ? 1.0/ubfactors[j] : .2);
+    }
+  }
+
+  perm = iwspacemalloc(ctrl, nvtxs);
+
+  safetos = iset(nparts, 2, iwspacemalloc(ctrl, nparts));
+
+  if (ctrl->minconn) {
+    ComputeSubDomainGraph(ctrl, graph);
+
+    nads    = ctrl->nads;
+    adids   = ctrl->adids;
+    adwgts  = ctrl->adwgts;
+    doms    = iset(nparts, 0, ctrl->pvec1);
+  }
+
+  vstatus = iset(nvtxs, VPQSTATUS_NOTPRESENT, iwspacemalloc(ctrl, nvtxs));
+  updptr  = iset(nvtxs, -1, iwspacemalloc(ctrl, nvtxs));
+  updind  = iwspacemalloc(ctrl, nvtxs);
+
+  if (ctrl->contig) {
+    bfslvl = iset(nvtxs, 0, iwspacemalloc(ctrl, nvtxs));
+    bfsind = iwspacemalloc(ctrl, nvtxs);
+    bfsmrk = iset(nvtxs, 0, iwspacemalloc(ctrl, nvtxs));
+  }
+
+  if (ctrl->dbglvl&METIS_DBG_REFINE) {
+    printf("%s: [%6"PRIDX" %6"PRIDX" %6"PRIDX"], Bal: %5.3"PRREAL"(%.3"PRREAL"),"
+           " Nv-Nb[%6"PRIDX" %6"PRIDX"], Cut: %6"PRIDX", Mod: %.6"PRREAL", (%"PRIDX")",
+        (omode == OMODE_REFINE ? "GRM" : "GBM"),
+        imin(nparts*ncon, pwgts,1), imax(nparts*ncon, pwgts,1), imax(nparts*ncon, maxpwgts,1),
+        ComputeLoadImbalance(graph, nparts, pijbm), origbal,
+        graph->nvtxs, graph->nbnd, graph->mincut, graph->modularity, niter);
+    if (ctrl->minconn)
+      printf(", Doms: [%3"PRIDX" %4"PRIDX"]", imax(nparts, nads,1), isum(nparts, nads,1));
+    printf("\n");
+  }
+
+  queue = rpqCreate(nvtxs);
+
+  for (pass=0; pass<niter; pass++) {
+    if (omode == OMODE_BALANCE && IsBalanced(ctrl, graph, 0))
+      break;
+
+    oldmod = graph->modularity;
+    nbnd   = graph->nbnd;
+    nupd   = 0;
+
+    if (ctrl->minconn)
+      maxndoms = imax(nparts, nads,1);
+
+    irandArrayPermute(nbnd, perm, nbnd/4, 1);
+    for (ii=0; ii<nbnd; ii++) {
+      i = bndind[perm[ii]];
+      rgain = KWayModularityVertexGain(ctrl, graph, i);
+      rpqInsert(queue, i, rgain);
+      vstatus[i] = VPQSTATUS_PRESENT;
+      ListInsert(nupd, updind, updptr, i);
+    }
+
+    for (nmoved=0, iii=0;;iii++) {
+      if ((i = rpqGetTop(queue)) == -1)
+        break;
+      vstatus[i] = VPQSTATUS_EXTRACTED;
+
+      myrinfo = graph->ckrinfo+i;
+      if (myrinfo->nnbrs <= 0 || myrinfo->inbr == -1)
+        continue;
+      mynbrs = ctrl->cnbrpool + myrinfo->inbr;
+
+      from = where[i];
+
+      if (!ivecaxpygez(ncon, -1, vwgt+i*ncon, pwgts+from*ncon, minpwgts+from*ncon))
+        continue;
+
+      if (ctrl->contig && IsArticulationNode(i, xadj, adjncy, where, bfslvl, bfsind, bfsmrk))
+        continue;
+
+      if (ctrl->minconn)
+        SelectSafeTargetSubdomains(myrinfo, mynbrs, nads, adids, maxndoms, safetos, doms);
+
+      bestgain = -REAL_MAX;
+      cto = -1;
+      vdeg = myrinfo->id + myrinfo->ed;
+
+      for (k=myrinfo->nnbrs-1; k>=0; k--) {
+        if (!safetos[to=mynbrs[k].pid])
+          continue;
+
+        gain = KWayModularityMoveGain(graph, from, to, myrinfo->id, vdeg, mynbrs[k].ed);
+
+        if (omode == OMODE_REFINE) {
+          if (!(gain > 0.0 &&
+                (ivecaxpylez(ncon, 1, vwgt+i*ncon, pwgts+to*ncon, maxpwgts+to*ncon) ||
+                 BetterBalanceKWay(ncon, vwgt+i*ncon, ubfactors,
+                     -1, pwgts+from*ncon, pijbm+from*ncon,
+                     +1, pwgts+to*ncon,   pijbm+to*ncon))))
+            continue;
+        }
+        else {
+          if (!(ivecaxpylez(ncon, 1, vwgt+i*ncon, pwgts+to*ncon, maxpwgts+to*ncon) ||
+                BetterBalanceKWay(ncon, vwgt+i*ncon, ubfactors,
+                    -1, pwgts+from*ncon, pijbm+from*ncon,
+                    +1, pwgts+to*ncon,   pijbm+to*ncon)))
+            continue;
+          if (gain < 0.0 && !BetterBalanceKWay(ncon, vwgt+i*ncon, ubfactors,
+                    -1, pwgts+from*ncon, pijbm+from*ncon,
+                    +1, pwgts+to*ncon,   pijbm+to*ncon))
+            continue;
+        }
+
+        if (cto == -1 || gain > bestgain ||
+            (gain == bestgain &&
+             BetterBalanceKWay(ncon, vwgt+i*ncon, ubfactors,
+                 1, pwgts+cto*ncon, pijbm+cto*ncon,
+                 1, pwgts+to*ncon,  pijbm+to*ncon))) {
+          cto = to;
+          bestgain = gain;
+        }
+      }
+      if (cto == -1)
+        continue;
+
+      to = cto;
+      for (k=0; k<myrinfo->nnbrs; k++) {
+        if (mynbrs[k].pid == to)
+          break;
+      }
+      ASSERT(k < myrinfo->nnbrs);
+
+      graph->mincut -= mynbrs[k].ed-myrinfo->id;
+      graph->modularity += bestgain;
+      INC_DEC(graph->pdeg[to], graph->pdeg[from], vdeg);
+      nmoved++;
+
+      IFSET(ctrl->dbglvl, METIS_DBG_MOVEINFO,
+          printf("\t\tMoving %6"PRIDX" from %3"PRIDX"/%"PRIDX" to %3"PRIDX"/%"PRIDX" "
+                 "ModGain: %.8"PRREAL" CutGain: %4"PRIDX" Mod: %.6"PRREAL"\n",
+              i, from, safetos[from], to, safetos[to], bestgain,
+              mynbrs[k].ed-myrinfo->id, graph->modularity));
+
+      if (ctrl->minconn) {
+        UpdateEdgeSubDomainGraph(ctrl, from, to, myrinfo->id-mynbrs[k].ed, &maxndoms);
+
+        for (j=xadj[i]; j<xadj[i+1]; j++) {
+          me = where[adjncy[j]];
+          if (me != from && me != to) {
+            UpdateEdgeSubDomainGraph(ctrl, from, me, -adjwgt[j], &maxndoms);
+            UpdateEdgeSubDomainGraph(ctrl, to, me, adjwgt[j], &maxndoms);
+          }
+        }
+      }
+
+      iaxpy(ncon,  1, vwgt+i*ncon, 1, pwgts+to*ncon,   1);
+      iaxpy(ncon, -1, vwgt+i*ncon, 1, pwgts+from*ncon, 1);
+      UpdateMovedVertexInfoAndBND(i, from, k, to, myrinfo, mynbrs, where,
+          nbnd, bndptr, bndind, bndtype);
+
+      for (j=xadj[i]; j<xadj[i+1]; j++) {
+        ii = adjncy[j];
+        me = where[ii];
+        myrinfo = graph->ckrinfo+ii;
+
+        oldnnbrs = myrinfo->nnbrs;
+
+        UpdateAdjacentVertexInfoAndBND(ctrl, ii, xadj[ii+1]-xadj[ii], me,
+            from, to, myrinfo, adjwgt[j], nbnd, bndptr, bndind, bndtype);
+
+        UpdateModularityQueueInfo(ctrl, graph, queue, vstatus, ii, me, from,
+            to, myrinfo, oldnnbrs, &nupd, updptr, updind);
+
+        ASSERT(myrinfo->nnbrs <= xadj[ii+1]-xadj[ii]);
+      }
+    }
+
+    graph->nbnd = nbnd;
+
+    for (i=0; i<nupd; i++) {
+      ASSERT(updptr[updind[i]] != -1);
+      ASSERT(vstatus[updind[i]] != VPQSTATUS_NOTPRESENT);
+      vstatus[updind[i]] = VPQSTATUS_NOTPRESENT;
+      updptr[updind[i]]  = -1;
+    }
+
+    if (ctrl->dbglvl&METIS_DBG_REFINE) {
+      printf("\t[%6"PRIDX" %6"PRIDX"], Bal: %5.3"PRREAL", Nb: %6"PRIDX"."
+             " Nmoves: %5"PRIDX", Cut: %6"PRIDX", Mod: %.6"PRREAL,
+          imin(nparts*ncon, pwgts,1), imax(nparts*ncon, pwgts,1),
+          ComputeLoadImbalance(graph, nparts, pijbm),
+          graph->nbnd, nmoved, graph->mincut, graph->modularity);
+      if (ctrl->minconn)
+        printf(", Doms: [%3"PRIDX" %4"PRIDX"]", imax(nparts, nads,1), isum(nparts, nads,1));
+      printf("\n");
+    }
+
+    if (nmoved == 0 || (omode == OMODE_REFINE && graph->modularity <= oldmod))
+      break;
+  }
+
+  rpqDestroy(queue);
+
+  WCOREPOP;
 }
 
 

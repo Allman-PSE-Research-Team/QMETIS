@@ -60,6 +60,9 @@
 /* debug.c */
 #define ComputeCut			libmetis__ComputeCut
 #define ComputeVolume			libmetis__ComputeVolume
+#define ComputeModularity              libmetis__ComputeModularity
+#define ComputeModularityObjective     libmetis__ComputeModularityObjective
+#define ScaleModularityObjective       libmetis__ScaleModularityObjective
 #define ComputeMaxCut			libmetis__ComputeMaxCut
 #define CheckBnd			libmetis__CheckBnd
 #define CheckBnd2			libmetis__CheckBnd2
@@ -128,6 +131,7 @@
 #define ProjectKWayPartition		libmetis__ProjectKWayPartition
 #define ComputeKWayBoundary		libmetis__ComputeKWayBoundary
 #define ComputeKWayVolGains             libmetis__ComputeKWayVolGains
+#define ComputeKWayModularityStats      libmetis__ComputeKWayModularityStats
 #define IsBalanced			libmetis__IsBalanced
 
 /* mcutil */

@@ -48,7 +48,7 @@ ctrl_t *SetupCtrl(moptype_et optype, idx_t *options, idx_t ncon, idx_t nparts,
 
 
     case METIS_OP_KMETIS:
-      ctrl->objtype = GETOPTION(options, METIS_OPTION_OBJTYPE, METIS_OBJTYPE_CUT);
+      ctrl->objtype = GETOPTION(options, METIS_OPTION_OBJTYPE, METIS_OBJTYPE_MOD);
       ctrl->iptype  = GETOPTION(options, METIS_OPTION_IPTYPE,  METIS_IPTYPE_METISRB);
       ctrl->rtype   = METIS_RTYPE_GREEDY;
       ctrl->nIparts = GETOPTION(options, METIS_OPTION_NIPARTS, -1);
@@ -186,6 +186,9 @@ void PrintCtrl(ctrl_t *ctrl)
       break;
     case METIS_OBJTYPE_NODE:
       printf("METIS_OBJTYPE_NODE\n");
+      break;
+    case METIS_OBJTYPE_MOD:
+      printf("METIS_OBJTYPE_MOD\n");
       break;
     default:
       printf("Unknown!\n");
@@ -371,7 +374,7 @@ int CheckParams(ctrl_t *ctrl)
       break;
 
     case METIS_OP_KMETIS:
-      if (ctrl->objtype != METIS_OBJTYPE_CUT && ctrl->objtype != METIS_OBJTYPE_VOL) {
+      if (ctrl->objtype != METIS_OBJTYPE_CUT && ctrl->objtype != METIS_OBJTYPE_VOL && ctrl->objtype != METIS_OBJTYPE_MOD) {
         IFSET(dbglvl, METIS_DBG_INFO, printf("Input Error: Incorrect objective type.\n"));
         return 0;
       }

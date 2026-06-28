@@ -28,12 +28,17 @@ void RefineKWay(ctrl_t *ctrl, graph_t *orggraph, graph_t *graph)
   ComputeKWayPartitionParams(ctrl, graph);
 
   /* Try to minimize the sub-domain connectivity */
-  if (ctrl->minconn) 
+  if (ctrl->minconn) {
     EliminateSubDomainEdges(ctrl, graph);
+    if (ctrl->objtype == METIS_OBJTYPE_MOD)
+      ComputeKWayModularityStats(ctrl, graph);
+  }
   
   /* Deal with contiguity constraints at the beginning */
   if (contig && FindPartitionInducedComponents(graph, graph->where, NULL, NULL) > ctrl->nparts) { 
     EliminateComponents(ctrl, graph);
+    if (ctrl->objtype == METIS_OBJTYPE_MOD)
+      ComputeKWayModularityStats(ctrl, graph);
 
     ComputeKWayBoundary(ctrl, graph, BNDTYPE_BALANCE);
     Greedy_KWayOptimize(ctrl, graph, 5, 0, OMODE_BALANCE); 
@@ -46,8 +51,11 @@ void RefineKWay(ctrl_t *ctrl, graph_t *orggraph, graph_t *graph)
 
   /* Refine each successively finer graph */
   for (i=0; ;i++) {
-    if (ctrl->minconn && i == nlevels/2) 
+    if (ctrl->minconn && i == nlevels/2) {
       EliminateSubDomainEdges(ctrl, graph);
+      if (ctrl->objtype == METIS_OBJTYPE_MOD)
+        ComputeKWayModularityStats(ctrl, graph);
+    }
 
     IFSET(ctrl->dbglvl, METIS_DBG_TIME, gk_startcputimer(ctrl->RefTmr));
 
@@ -65,6 +73,8 @@ void RefineKWay(ctrl_t *ctrl, graph_t *orggraph, graph_t *graph)
     if (contig && i == nlevels/2) {
       if (FindPartitionInducedComponents(graph, graph->where, NULL, NULL) > ctrl->nparts) {
         EliminateComponents(ctrl, graph);
+        if (ctrl->objtype == METIS_OBJTYPE_MOD)
+          ComputeKWayModularityStats(ctrl, graph);
 
         if (!IsBalanced(ctrl, graph, .02)) {
           ctrl->contig = 1;
@@ -94,8 +104,11 @@ void RefineKWay(ctrl_t *ctrl, graph_t *orggraph, graph_t *graph)
 
   /* Deal with contiguity requirement at the end */
   ctrl->contig = contig;
-  if (contig && FindPartitionInducedComponents(graph, graph->where, NULL, NULL) > ctrl->nparts) 
+  if (contig && FindPartitionInducedComponents(graph, graph->where, NULL, NULL) > ctrl->nparts) {
     EliminateComponents(ctrl, graph);
+    if (ctrl->objtype == METIS_OBJTYPE_MOD)
+      ComputeKWayModularityStats(ctrl, graph);
+  }
 
   if (!IsBalanced(ctrl, graph, 0.0)) {
     ComputeKWayBoundary(ctrl, graph, BNDTYPE_BALANCE);
@@ -125,8 +138,11 @@ void AllocateKWayPartitionMemory(ctrl_t *ctrl, graph_t *graph)
 
   switch (ctrl->objtype) {
     case METIS_OBJTYPE_CUT:
+    case METIS_OBJTYPE_MOD:
       graph->ckrinfo  = (ckrinfo_t *)gk_malloc(graph->nvtxs*sizeof(ckrinfo_t), 
                           "AllocateKWayPartitionMemory: ckrinfo");
+      if (ctrl->objtype == METIS_OBJTYPE_MOD)
+        graph->pdeg = imalloc(ctrl->nparts, "AllocateKWayPartitionMemory: pdeg");
       break;
 
     case METIS_OBJTYPE_VOL:
@@ -187,6 +203,7 @@ void ComputeKWayPartitionParams(ctrl_t *ctrl, graph_t *graph)
   /* Compute the required info for refinement */
   switch (ctrl->objtype) {
     case METIS_OBJTYPE_CUT:
+    case METIS_OBJTYPE_MOD:
       {
         ckrinfo_t *myrinfo;
         cnbr_t *mynbrs;
@@ -232,7 +249,7 @@ void ComputeKWayPartitionParams(ctrl_t *ctrl, graph_t *graph)
             ASSERT(myrinfo->nnbrs <= xadj[i+1]-xadj[i]);
 
             /* Only ed-id>=0 nodes are considered to be in the boundary */
-            if (myrinfo->ed-myrinfo->id >= 0)
+            if (ctrl->objtype == METIS_OBJTYPE_MOD || myrinfo->ed-myrinfo->id >= 0)
               BNDInsert(nbnd, bndind, bndptr, i);
           }
           else {
@@ -242,9 +259,12 @@ void ComputeKWayPartitionParams(ctrl_t *ctrl, graph_t *graph)
 
         graph->mincut = mincut/2;
         graph->nbnd   = nbnd;
+        if (ctrl->objtype == METIS_OBJTYPE_MOD)
+          ComputeKWayModularityStats(ctrl, graph);
 
       }
-      ASSERT(CheckBnd2(graph));
+      if (ctrl->objtype == METIS_OBJTYPE_CUT)
+        ASSERT(CheckBnd2(graph));
       break;
 
     case METIS_OBJTYPE_VOL:
@@ -334,7 +354,7 @@ void ProjectKWayPartition(ctrl_t *ctrl, graph_t *graph)
   if (ctrl->objtype == METIS_OBJTYPE_CUT) {
     ASSERT(CheckBnd2(cgraph));
   }
-  else {
+  else if (ctrl->objtype == METIS_OBJTYPE_VOL) {
     ASSERT(cgraph->minvol == ComputeVolume(cgraph, cgraph->where));
   }
 
@@ -358,6 +378,7 @@ void ProjectKWayPartition(ctrl_t *ctrl, graph_t *graph)
   /* Compute the required info for refinement */
   switch (ctrl->objtype) {
     case METIS_OBJTYPE_CUT:
+    case METIS_OBJTYPE_MOD:
       {
         ckrinfo_t *myrinfo;
         cnbr_t *mynbrs;
@@ -416,7 +437,7 @@ void ProjectKWayPartition(ctrl_t *ctrl, graph_t *graph)
               myrinfo->inbr      = -1;
             }
             else {
-              if (ted-tid >= 0) 
+              if (ctrl->objtype == METIS_OBJTYPE_MOD || ted-tid >= 0) 
                 BNDInsert(nbnd, bndind, bndptr, i); 
       
               for (j=0; j<myrinfo->nnbrs; j++)
@@ -426,8 +447,11 @@ void ProjectKWayPartition(ctrl_t *ctrl, graph_t *graph)
         }
       
         graph->nbnd = nbnd;
+        if (ctrl->objtype == METIS_OBJTYPE_MOD)
+          ComputeKWayModularityStats(ctrl, graph);
       }
-      ASSERT(CheckBnd2(graph));
+      if (ctrl->objtype == METIS_OBJTYPE_CUT)
+        ASSERT(CheckBnd2(graph));
       break;
 
     case METIS_OBJTYPE_VOL:
@@ -542,6 +566,13 @@ void ComputeKWayBoundary(ctrl_t *ctrl, graph_t *graph, idx_t bndtype)
       }
       break;
 
+    case METIS_OBJTYPE_MOD:
+      for (i=0; i<nvtxs; i++) {
+        if (graph->ckrinfo[i].ed > 0)
+          BNDInsert(nbnd, bndind, bndptr, i);
+      }
+      break;
+
     case METIS_OBJTYPE_VOL:
       /* Compute the boundary */
       if (bndtype == BNDTYPE_REFINE) {
@@ -563,6 +594,42 @@ void ComputeKWayBoundary(ctrl_t *ctrl, graph_t *graph, idx_t bndtype)
   }
 
   graph->nbnd = nbnd;
+}
+
+
+/*************************************************************************/
+/*! This function computes partition degree totals and modularity. */
+/*************************************************************************/
+void ComputeKWayModularityStats(ctrl_t *ctrl, graph_t *graph)
+{
+  idx_t i, nparts, vdeg;
+  double totaladjwgt, internaladjwgt, expected;
+
+  ASSERT(ctrl->objtype == METIS_OBJTYPE_MOD);
+  ASSERT(graph->pdeg != NULL);
+
+  nparts = ctrl->nparts;
+
+  iset(nparts, 0, graph->pdeg);
+  graph->totaladjwgt = 0;
+
+  totaladjwgt = internaladjwgt = 0.0;
+  for (i=0; i<graph->nvtxs; i++) {
+    vdeg = graph->ckrinfo[i].id + graph->ckrinfo[i].ed;
+    graph->pdeg[graph->where[i]] += vdeg;
+    graph->totaladjwgt += vdeg;
+    totaladjwgt += (double)vdeg;
+    internaladjwgt += (double)graph->ckrinfo[i].id;
+  }
+
+  graph->modularity = 0.0;
+  if (totaladjwgt > 0.0) {
+    expected = 0.0;
+    for (i=0; i<nparts; i++)
+      expected += (double)graph->pdeg[i]*(double)graph->pdeg[i];
+    graph->modularity = (real_t)(internaladjwgt/totaladjwgt -
+        expected/(totaladjwgt*totaladjwgt));
+  }
 }
 
 

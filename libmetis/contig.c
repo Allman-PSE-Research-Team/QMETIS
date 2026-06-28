@@ -490,6 +490,7 @@ void EliminateComponents(ctrl_t *ctrl, graph_t *graph)
         if (target != me) {
           switch (ctrl->objtype) {
             case METIS_OBJTYPE_CUT:
+            case METIS_OBJTYPE_MOD:
               MoveGroupContigForCut(ctrl, graph, target, cid, cptr, cind);
               break;
 
