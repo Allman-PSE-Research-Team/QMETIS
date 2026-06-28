@@ -95,9 +95,10 @@ idx_t ScaleModularityObjective(real_t modularity)
 /*************************************************************************/
 real_t ComputeModularity(graph_t *graph, idx_t nparts, idx_t *where)
 {
-  idx_t i, j, me, other, ewgt;
-  idx_t *xadj, *adjncy, *adjwgt, *pdeg;
-  double totaladjwgt, internaladjwgt, expected;
+  idx_t i, j, me, other, otherpart, ewgt;
+  idx_t *xadj, *adjncy, *adjwgt;
+  double *pdeg;
+  double totalewgt, internalewgt, expected;
   real_t modularity;
 
   if (nparts <= 0)
@@ -107,29 +108,48 @@ real_t ComputeModularity(graph_t *graph, idx_t nparts, idx_t *where)
   adjncy = graph->adjncy;
   adjwgt = graph->adjwgt;
 
-  pdeg = ismalloc(nparts, 0, "ComputeModularity: pdeg");
+  pdeg = (double *)gk_malloc(nparts*sizeof(double), "ComputeModularity: pdeg");
+  memset(pdeg, 0, nparts*sizeof(double));
 
-  totaladjwgt = internaladjwgt = 0.0;
+  /* Match NetworkX's undirected modularity convention: each non-loop edge is
+     counted once, while a self-loop contributes one internal edge and two
+     weighted-degree units. METIS inputs are expected to be symmetric, so the
+     i<other test removes the mirrored CSR entry. */
+  totalewgt = internalewgt = 0.0;
   for (i=0; i<graph->nvtxs; i++) {
     me = where[i];
     ASSERT(me >= 0 && me < nparts);
     for (j=xadj[i]; j<xadj[i+1]; j++) {
-      other = where[adjncy[j]];
-      ewgt  = (adjwgt ? adjwgt[j] : 1);
-      totaladjwgt += (double)ewgt;
-      pdeg[me] += ewgt;
-      if (me == other)
-        internaladjwgt += (double)ewgt;
+      other = adjncy[j];
+      ASSERT(other >= 0 && other < graph->nvtxs);
+      if (other < i)
+        continue;
+
+      otherpart = where[other];
+      ASSERT(otherpart >= 0 && otherpart < nparts);
+      ewgt = (adjwgt ? adjwgt[j] : 1);
+
+      totalewgt += (double)ewgt;
+      if (other == i) {
+        pdeg[me] += 2.0*(double)ewgt;
+        internalewgt += (double)ewgt;
+      }
+      else {
+        pdeg[me] += (double)ewgt;
+        pdeg[otherpart] += (double)ewgt;
+        if (me == otherpart)
+          internalewgt += (double)ewgt;
+      }
     }
   }
 
   modularity = 0.0;
-  if (totaladjwgt > 0.0) {
+  if (totalewgt > 0.0) {
     expected = 0.0;
     for (i=0; i<nparts; i++)
-      expected += (double)pdeg[i]*(double)pdeg[i];
-    modularity = (real_t)(internaladjwgt/totaladjwgt -
-        expected/(totaladjwgt*totaladjwgt));
+      expected += pdeg[i]*pdeg[i];
+    modularity = (real_t)(internalewgt/totalewgt -
+        expected/(4.0*totalewgt*totalewgt));
   }
 
   gk_free((void **)&pdeg, LTERM);

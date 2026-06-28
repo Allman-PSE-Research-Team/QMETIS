@@ -16,7 +16,7 @@ Usage:
 Options:
   --prefix PATH          Install prefix. Default: $PWD/metis-local
   --metis-url URL        METIS git URL. Default: https://github.com/Allman-PSE-Research-Team/METIS.git
-  --metis-ref REF        METIS branch, tag, or commit. Default: 5e7c7bc
+  --metis-ref REF        METIS branch, tag, or commit. Default: 1b0fcb0
   --gklib-url URL        GKlib git URL. Default: https://github.com/KarypisLab/GKlib.git
   --gklib-ref REF        Optional GKlib branch, tag, or commit.
   --i64                  Build METIS with 64-bit idx_t.
@@ -52,7 +52,7 @@ need_c_compiler() {
 
 PREFIX="${PREFIX:-$PWD/metis-local}"
 METIS_URL="${METIS_URL:-https://github.com/Allman-PSE-Research-Team/METIS.git}"
-METIS_REF="${METIS_REF:-5e7c7bc}"
+METIS_REF="${METIS_REF:-1b0fcb0}"
 GKLIB_URL="${GKLIB_URL:-https://github.com/KarypisLab/GKlib.git}"
 GKLIB_REF="${GKLIB_REF:-}"
 METIS_I64="${METIS_I64:-0}"
