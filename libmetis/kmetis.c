@@ -143,7 +143,7 @@ idx_t MlevelKWayPartitioning(ctrl_t *ctrl, graph_t *graph, idx_t *part)
         break;
 
       case METIS_OBJTYPE_MOD:
-        curobj = ScaleModularityObjective(graph->modularity);
+        curobj = ComputeModularityObjective(graph, ctrl->nparts, graph->where);
         break;
 
       default:
@@ -166,6 +166,9 @@ idx_t MlevelKWayPartitioning(ctrl_t *ctrl, graph_t *graph, idx_t *part)
     if (ctrl->objtype != METIS_OBJTYPE_MOD && bestobj == 0)
       break;
   }
+
+  if (ctrl->objtype == METIS_OBJTYPE_MOD)
+    bestobj = ComputeModularityObjective(graph, ctrl->nparts, part);
 
   FreeGraph(&graph);
 
