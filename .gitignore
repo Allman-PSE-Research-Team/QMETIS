@@ -67,3 +67,6 @@ GKlib
 # macOS Finder droppings
 .DS_Store
 
+# build artifacts
+.vs
+built
