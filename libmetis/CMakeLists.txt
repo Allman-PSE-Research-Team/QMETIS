@@ -10,8 +10,11 @@ add_library(qmetis ${METIS_LIBRARY_TYPE} $<TARGET_OBJECTS:qmetis_objs>)
 add_library(metis_compat ${METIS_LIBRARY_TYPE} $<TARGET_OBJECTS:qmetis_objs>)
 set_target_properties(qmetis PROPERTIES OUTPUT_NAME qmetis)
 set_target_properties(metis_compat PROPERTIES OUTPUT_NAME metis)
-target_link_libraries(qmetis GKlib)
-target_link_libraries(metis_compat GKlib)
+if(WIN32 AND SHARED)
+  target_compile_definitions(qmetis_objs PRIVATE _WINDLL)
+endif()
+target_link_libraries(qmetis PRIVATE GKlib)
+target_link_libraries(metis_compat PRIVATE GKlib)
 
 if(METIS_INSTALL)
   install(TARGETS qmetis metis_compat

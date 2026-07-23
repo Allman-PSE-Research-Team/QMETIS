@@ -1,4 +1,2 @@
-if(METIS_INSTALL)
-  install(FILES metis.h DESTINATION include RENAME qmetis.h)
-  install(FILES metis.h DESTINATION include)
-endif()
+# Header installation is handled by the top-level CMakeLists.txt because the
+# installed header records the configured idx_t and real_t widths.
