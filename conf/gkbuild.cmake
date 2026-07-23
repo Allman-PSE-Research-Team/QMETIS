@@ -69,9 +69,13 @@ endif(OPENMP)
 
 # Add various definitions.
 if(GDB)
-  set(GK_COPTS "${GK_COPTS} -g")
-  set(GK_COPTIONS "${GK_COPTIONS} -Werror")
-else()
+  if(MSVC)
+    set(GK_COPTS "${GK_COPTS} /Zi")
+  else()
+    set(GK_COPTS "${GK_COPTS} -g")
+    set(GK_COPTIONS "${GK_COPTIONS} -Werror")
+  endif()
+elseif(NOT MSVC)
   set(GK_COPTS "-O3")
 endif(GDB)
 
@@ -120,24 +124,12 @@ if(HAVE_GETLINE)
 endif(HAVE_GETLINE)
 
 
-# Custom check for TLS.
+# MSVC supports native thread-local storage through __declspec(thread).
+# Keep this definition identical to GKlib's configuration because the
+# signal-recovery jump buffers are declared in GKlib headers and defined in
+# the separately compiled GKlib library.
 if(MSVC)
   set(GK_COPTIONS "${GK_COPTIONS} -D__thread=__declspec(thread)")
-
-  # This if checks if that value is cached or not.
-  if("${HAVE_THREADLOCALSTORAGE}" MATCHES "^${HAVE_THREADLOCALSTORAGE}$")
-    try_compile(HAVE_THREADLOCALSTORAGE
-      ${CMAKE_BINARY_DIR}
-      ${CMAKE_SOURCE_DIR}/conf/check_thread_storage.c)
-    if(HAVE_THREADLOCALSTORAGE)
-      message(STATUS "checking for thread-local storage - found")
-    else()
-      message(STATUS "checking for thread-local storage - not found")
-    endif()
-  endif()
-  if(NOT HAVE_THREADLOCALSTORAGE)
-    set(GK_COPTIONS "${GK_COPTIONS} -D__thread=")
-  endif()
 endif()
 
 # Finally set the official C flags.

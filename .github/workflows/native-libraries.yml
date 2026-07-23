@@ -1,0 +1,168 @@
+name: Native libraries
+
+on:
+  workflow_dispatch:
+    inputs:
+      idx_width:
+        description: Width of idx_t and integer graph weights
+        required: true
+        default: "64"
+        type: choice
+        options: ["32", "64"]
+      real_width:
+        description: Width of real_t
+        required: true
+        default: "32"
+        type: choice
+        options: ["32", "64"]
+  pull_request:
+  push:
+    branches: [main, master]
+    tags: ["v*", "qmetis-v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  QMETIS_IDXTYPEWIDTH: ${{ inputs.idx_width || '64' }}
+  QMETIS_REALTYPEWIDTH: ${{ inputs.real_width || '32' }}
+  GKLIB_REF: 3b7d61b9f885063c89901f3901fb4426f9cfb58f
+
+jobs:
+  build-unix:
+    name: Build ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            platform: linux-x86_64
+          - runner: macos-15
+            platform: macos-arm64
+          - runner: macos-15-intel
+            platform: macos-x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, verify, and package
+        env:
+          QMETIS_PLATFORM: ${{ matrix.platform }}
+        run: bash .github/scripts/build-unix.sh
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qmetis-${{ matrix.platform }}-idx${{ env.QMETIS_IDXTYPEWIDTH }}-real${{ env.QMETIS_REALTYPEWIDTH }}
+          path: |
+            dist/qmetis-*-${{ matrix.platform }}-idx${{ env.QMETIS_IDXTYPEWIDTH }}-real${{ env.QMETIS_REALTYPEWIDTH }}/
+            dist/qmetis-*-${{ matrix.platform }}-idx${{ env.QMETIS_IDXTYPEWIDTH }}-real${{ env.QMETIS_REALTYPEWIDTH }}.tar.gz
+          if-no-files-found: error
+
+  build-windows:
+    name: Build windows-x86_64
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, verify, and package
+        shell: pwsh
+        run: .github/scripts/build-windows.ps1
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qmetis-windows-x86_64-idx${{ env.QMETIS_IDXTYPEWIDTH }}-real${{ env.QMETIS_REALTYPEWIDTH }}
+          path: |
+            dist/qmetis-*-windows-x86_64-idx${{ env.QMETIS_IDXTYPEWIDTH }}-real${{ env.QMETIS_REALTYPEWIDTH }}/
+            dist/qmetis-*-windows-x86_64-idx${{ env.QMETIS_IDXTYPEWIDTH }}-real${{ env.QMETIS_REALTYPEWIDTH }}.zip
+          if-no-files-found: error
+
+  build-macos-universal:
+    name: Merge macos-universal2
+    needs: build-unix
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download ARM64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: qmetis-macos-arm64-idx${{ env.QMETIS_IDXTYPEWIDTH }}-real${{ env.QMETIS_REALTYPEWIDTH }}
+          path: inputs/arm64
+      - name: Download x86-64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: qmetis-macos-x86_64-idx${{ env.QMETIS_IDXTYPEWIDTH }}-real${{ env.QMETIS_REALTYPEWIDTH }}
+          path: inputs/x86_64
+      - name: Merge, verify, and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_name="qmetis-5.2.1-macos-universal2-idx${QMETIS_IDXTYPEWIDTH}-real${QMETIS_REALTYPEWIDTH}"
+          package_dir="$GITHUB_WORKSPACE/dist/$package_name"
+          arm_dir="$(find inputs/arm64 -type d -name 'qmetis-*-macos-arm64-*' | head -n 1)"
+          intel_dir="$(find inputs/x86_64 -type d -name 'qmetis-*-macos-x86_64-*' | head -n 1)"
+          test -n "$arm_dir" && test -n "$intel_dir"
+          mkdir -p "$package_dir/lib" "$package_dir/include"
+          lipo -create "$arm_dir/lib/libqmetis.dylib" "$intel_dir/lib/libqmetis.dylib" \
+            -output "$package_dir/lib/libqmetis.dylib"
+          lipo -create "$arm_dir/lib/libmetis.dylib" "$intel_dir/lib/libmetis.dylib" \
+            -output "$package_dir/lib/libmetis.dylib"
+          cp "$arm_dir/include/qmetis.h" "$arm_dir/include/metis.h" "$package_dir/include/"
+          cp "$arm_dir/LICENSE" "$arm_dir/README.md" "$package_dir/"
+          {
+            echo "QMETIS_COMMIT=$GITHUB_SHA"
+            echo "GKLIB_COMMIT=$GKLIB_REF"
+            echo "PLATFORM=macos-universal2"
+            echo "ARCHITECTURES=arm64;x86_64"
+            echo "IDXTYPEWIDTH=$QMETIS_IDXTYPEWIDTH"
+            echo "REALTYPEWIDTH=$QMETIS_REALTYPEWIDTH"
+            echo "BUILD_TYPE=Release"
+          } > "$package_dir/BUILD-INFO.txt"
+          test "$(lipo -archs "$package_dir/lib/libqmetis.dylib")" = "x86_64 arm64" || \
+            test "$(lipo -archs "$package_dir/lib/libqmetis.dylib")" = "arm64 x86_64"
+          nm -gU "$package_dir/lib/libqmetis.dylib" | grep '_METIS_PartGraphKway' >/dev/null
+          python3 .github/scripts/verify_library.py \
+            "$package_dir/lib/libqmetis.dylib" "$package_dir/include/qmetis.h" \
+            "$QMETIS_IDXTYPEWIDTH" "$QMETIS_REALTYPEWIDTH"
+          (cd "$package_dir" && shasum -a 256 lib/* include/* LICENSE README.md BUILD-INFO.txt > SHA256SUMS)
+          tar -C dist -czf "dist/$package_name.tar.gz" "$package_name"
+      - name: Upload universal artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qmetis-macos-universal2-idx${{ env.QMETIS_IDXTYPEWIDTH }}-real${{ env.QMETIS_REALTYPEWIDTH }}
+          path: |
+            dist/qmetis-*-macos-universal2-idx${{ env.QMETIS_IDXTYPEWIDTH }}-real${{ env.QMETIS_REALTYPEWIDTH }}/
+            dist/qmetis-*-macos-universal2-idx${{ env.QMETIS_IDXTYPEWIDTH }}-real${{ env.QMETIS_REALTYPEWIDTH }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-unix, build-windows, build-macos-universal]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: qmetis-*
+          path: artifacts
+      - name: Create checksums and publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t archives < <(find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) | sort)
+          test "${#archives[@]}" -ge 5
+          sha256sum "${archives[@]}" > SHA256SUMS
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --generate-notes --verify-tag
+          fi
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber "${archives[@]}" SHA256SUMS

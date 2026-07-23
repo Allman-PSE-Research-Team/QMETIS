@@ -9,12 +9,50 @@ partitioning schemes developed in our lab.
 
 Clone the QMETIS source tree using the command:
 ```
-git clone <qmetis-repository-url>
+git clone https://github.com/Allman-PSE-Research-Team/METIS.git QMETIS
 ```
 
 ## Building standalone QMETIS binaries and library
 
 To build QMETIS you can follow the instructions below:
+
+### Automated native artifacts
+
+The [native library workflow](.github/workflows/native-libraries.yml) builds and
+verifies release libraries without requiring local access to every operating
+system. It produces:
+
+```text
+qmetis-5.2.1-linux-x86_64-idx64-real32.tar.gz
+qmetis-5.2.1-windows-x86_64-idx64-real32.zip
+qmetis-5.2.1-macos-arm64-idx64-real32.tar.gz
+qmetis-5.2.1-macos-x86_64-idx64-real32.tar.gz
+qmetis-5.2.1-macos-universal2-idx64-real32.tar.gz
+```
+
+Every package includes the primary `qmetis` library, the filename-compatible
+`metis` library, configured headers, licenses, build metadata, and SHA-256
+checksums. CI loads each primary library and calls `METIS_PartGraphKway` before
+publishing it. The universal macOS dylib is assembled from separately built
+native ARM64 and Intel artifacts and is checked with `lipo`.
+
+To build artifacts without creating a release, open **Actions**, select
+**Native libraries**, choose **Run workflow**, and select the desired integer
+and real widths. The default release ABI is `IDXTYPEWIDTH=64` and
+`REALTYPEWIDTH=32`. Workflow artifacts are available from the completed run.
+
+Pushing a tag beginning with `v` or `qmetis-v` builds the same matrix and
+attaches all archives plus a top-level `SHA256SUMS` file to a GitHub Release:
+
+```bash
+git tag qmetis-v5.2.1-modularity.1
+git push origin qmetis-v5.2.1-modularity.1
+```
+
+These archives can be embedded as native resources in a larger Python
+package. The larger package must publish platform-specific wheels, or a
+`universal2` macOS wheel when it embeds the universal dylib, and must configure
+its wrapper for the ABI widths recorded in `BUILD-INFO.txt`.
 
 ### Native Linux and macOS build
 
@@ -39,7 +77,7 @@ xcode-select --install
 ```
 
 Then install CMake and Git with Homebrew if they are not already available:
-m, 
+
 ```bash
 brew install cmake git
 ```
@@ -127,17 +165,9 @@ cmake --install build --config Release
 
 The GKlib prefix should now contain `include\GKlib.h` and `lib\GKlib.lib`.
 Use the same Visual Studio generator, architecture, and configuration for
-QMETIS. In the QMETIS source directory, select the public integer and
-floating-point widths in `include\metis.h`:
-
-```c
-#define IDXTYPEWIDTH 64
-#define REALTYPEWIDTH 64
-```
-
-`IDXTYPEWIDTH` may be `32` or `64`; it is independent of the `-A x64` CPU
-architecture. Python wrappers must be configured for the same integer width
-as the compiled library.
+QMETIS. Configure the ABI widths through CMake; do not edit `metis.h` manually.
+`IDXTYPEWIDTH` may be `32` or `64` and is independent of the `-A x64` CPU
+architecture. Python wrappers must use both widths selected for the library.
 
 Configure and build the primary QMETIS DLL:
 
@@ -146,6 +176,9 @@ Configure and build the primary QMETIS DLL:
   -G "Visual Studio 18 2026" `
   -A x64 `
   -DSHARED=ON `
+  -DQMETIS_BUILD_PROGRAMS=OFF `
+  -DIDXTYPEWIDTH=64 `
+  -DREALTYPEWIDTH=32 `
   -DGKLIB_PATH="C:\qmetis-deps"
 
 cmake --build build\windows --config Release --target qmetis
@@ -179,7 +212,6 @@ To remove a previous QMETIS Windows configuration:
 
 ```powershell
 Remove-Item -LiteralPath .\build\windows -Recurse -Force
-Remove-Item -LiteralPath .\build\xinclude -Recurse -Force
 ```
 
 ### Common configuration options are:
@@ -195,6 +227,10 @@ Remove-Item -LiteralPath .\build\xinclude -Recurse -Force
                         about the vertices and their adjacency lists. 
     r64=1             - Sets to 64 bits the width of the datatype that will store information 
                         about floating point numbers.
+
+Direct CMake builds use `-DIDXTYPEWIDTH=32|64` and
+`-DREALTYPEWIDTH=32|64`. The generated installed headers record the selected
+ABI. Add `-DQMETIS_BUILD_PROGRAMS=OFF` when only the native library is needed.
 
 ### Advanced debugging related options:
 

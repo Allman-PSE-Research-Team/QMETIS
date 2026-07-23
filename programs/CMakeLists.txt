@@ -11,7 +11,10 @@ add_executable(qcmpfillin cmpfillin.c io.c smbfactor.c)
 
 # Link with the required libraries
 foreach(prog qgpmetis qndmetis qmpmetis qm2gmetis qgraphchk qcmpfillin)
-  target_link_libraries(${prog} qmetis GKlib m)
+  target_link_libraries(${prog} qmetis GKlib)
+  if(NOT MSVC)
+    target_link_libraries(${prog} m)
+  endif()
 endforeach(prog)
 
 if(METIS_INSTALL)

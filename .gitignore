@@ -69,4 +69,4 @@ GKlib
 
 # build artifacts
 .vs
-built
+qmetis_builds*
