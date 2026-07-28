@@ -18,9 +18,11 @@
     \brief Recursive partitioning routine.
 
     This function computes a partitioning of a graph based on multilevel
-    recursive bisection. It can be used to partition a graph into \e k 
-    parts. The objective of the partitioning is to minimize the edgecut
-    subject to one or more balancing constraints.
+    recursive bisection. It can be used to partition a graph into \e k
+    parts. The default objective is modularity: recursive bisection constructs
+    the balanced seed and global k-way refinement maximizes modularity against
+    the original graph. Explicit METIS_OBJTYPE_CUT retains the original
+    edge-cut-only recursive-bisection behavior.
 
     \param[in] nvtxs is the number of vertices in the graph.
 
@@ -72,7 +74,8 @@
            in order to customize the behaviour of the partitioning
            algorithm.
 
-    \params[out] edgecut stores the cut of the partitioning.
+    \params[out] objval stores scaled modularity for the modularity objective
+           or the edge cut for METIS_OBJTYPE_CUT.
 
     \params[out] part is an array of size nvtxs used to store the 
            computed partitioning. The partition number for the ith
@@ -94,8 +97,32 @@ int METIS_PartGraphRecursive(idx_t *nvtxs, idx_t *ncon, idx_t *xadj,
           idx_t *objval, idx_t *part)
 {
   int sigrval=0, renumber=0;
+  idx_t koptions[METIS_NOPTIONS];
   graph_t *graph;
   ctrl_t *ctrl;
+
+  /*
+   * Modularity is a global objective: evaluating each recursive subgraph
+   * independently would use the wrong total degree and expected-edge term.
+   * Reuse the k-way modularity driver, whose seed is produced by this routine
+   * with METIS_OBJTYPE_CUT explicitly set in InitKWayPartitioning.
+   */
+  if (GETOPTION(options, METIS_OPTION_OBJTYPE, METIS_OBJTYPE_MOD) ==
+      METIS_OBJTYPE_MOD) {
+    if (options != NULL)
+      memcpy(koptions, options, METIS_NOPTIONS*sizeof(idx_t));
+    else
+      METIS_SetDefaultOptions(koptions);
+
+    koptions[METIS_OPTION_OBJTYPE] = METIS_OBJTYPE_MOD;
+    if (koptions[METIS_OPTION_UFACTOR] == -1) {
+      koptions[METIS_OPTION_UFACTOR] =
+          (*ncon == 1 ? PMETIS_DEFAULT_UFACTOR : MCPMETIS_DEFAULT_UFACTOR);
+    }
+
+    return METIS_PartGraphKway(nvtxs, ncon, xadj, adjncy, vwgt, vsize,
+        adjwgt, nparts, tpwgts, ubvec, koptions, objval, part);
+  }
 
   /* set up malloc cleaning code and signal catchers */
   if (!gk_malloc_init()) 

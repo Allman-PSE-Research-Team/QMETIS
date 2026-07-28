@@ -93,7 +93,8 @@ idx_t ScaleModularityObjective(real_t modularity)
 /*************************************************************************/
 /*! This function computes Newman-Girvan modularity for a partition. */
 /*************************************************************************/
-real_t ComputeModularity(graph_t *graph, idx_t nparts, idx_t *where)
+real_t ComputeModularity(graph_t *graph, idx_t nparts, idx_t *where,
+         real_t resolution)
 {
   idx_t i, j, me, other, otherpart, ewgt;
   idx_t *xadj, *adjncy, *adjwgt;
@@ -149,7 +150,7 @@ real_t ComputeModularity(graph_t *graph, idx_t nparts, idx_t *where)
     for (i=0; i<nparts; i++)
       expected += pdeg[i]*pdeg[i];
     modularity = (real_t)(internalewgt/totalewgt -
-        expected/(4.0*totalewgt*totalewgt));
+        (double)resolution*expected/(4.0*totalewgt*totalewgt));
   }
 
   gk_free((void **)&pdeg, LTERM);
@@ -161,9 +162,11 @@ real_t ComputeModularity(graph_t *graph, idx_t nparts, idx_t *where)
 /*************************************************************************/
 /*! This function computes the scaled modularity objective value. */
 /*************************************************************************/
-idx_t ComputeModularityObjective(graph_t *graph, idx_t nparts, idx_t *where)
+idx_t ComputeModularityObjective(graph_t *graph, idx_t nparts, idx_t *where,
+         real_t resolution)
 {
-  return ScaleModularityObjective(ComputeModularity(graph, nparts, where));
+  return ScaleModularityObjective(
+      ComputeModularity(graph, nparts, where, resolution));
 }
 
 

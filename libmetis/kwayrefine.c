@@ -628,7 +628,7 @@ void ComputeKWayModularityStats(ctrl_t *ctrl, graph_t *graph)
     for (i=0; i<nparts; i++)
       expected += (double)graph->pdeg[i]*(double)graph->pdeg[i];
     graph->modularity = (real_t)(internaladjwgt/totaladjwgt -
-        expected/(totaladjwgt*totaladjwgt));
+        (double)ctrl->modresolution*expected/(totaladjwgt*totaladjwgt));
   }
 }
 

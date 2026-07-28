@@ -18,6 +18,7 @@ static struct gk_option long_options[] = {
   {"gtype",          1,      0,      METIS_OPTION_GTYPE},
   {"ptype",          1,      0,      METIS_OPTION_PTYPE},
   {"objtype",        1,      0,      METIS_OPTION_OBJTYPE},
+  {"resolution",     1,      0,      METIS_OPTION_MODRESOLUTION},
 
   {"ctype",          1,      0,      METIS_OPTION_CTYPE},
   {"iptype",         1,      0,      METIS_OPTION_IPTYPE},
@@ -119,19 +120,24 @@ static char helpstr[][100] =
 "        grow     - Grow a bisection using a greedy strategy [default]",
 "        random   - Compute a bisection at random",
 " ",
-"  -objtype=string [applies only when -ptype=kway]",
+"  -objtype=string",
 "     Specifies the objective that the partitioning routines will optimize.",
 "     The possible values are:",
 "        mod      - Maximize Newman-Girvan modularity [default]",
 "        cut      - Minimize the edgecut",
 "        vol      - Minimize the total communication volume",
 " ",
-"  -contig [applies only when -ptype=kway]",
+"  -resolution=real [applies when -objtype=mod]",
+"     Sets the Newman-Girvan modularity resolution gamma. Values below 1",
+"     favor larger communities; values above 1 favor smaller communities.",
+"     The value must be non-negative. Default is 1.",
+" ",
+"  -contig [not available with -ptype=rb -objtype=cut]",
 "     Specifies that the partitioning routines should try to produce",
 "     partitions that are contiguous. Note that if the input graph is not",
 "     connected this option is ignored.",
 " ",
-"  -minconn [applies only when -ptype=kway]",
+"  -minconn [not available with -ptype=rb -objtype=cut]",
 "     Specifies that the partitioning routines should try to minimize the",
 "     maximum degree of the subdomain graph, i.e., the graph in which each",
 "     partition is a node, and edges connect subdomains with a shared",
@@ -207,6 +213,7 @@ params_t *parse_cmdline(int argc, char *argv[])
   params->gtype         = METIS_GTYPE_DUAL;
   params->ptype         = METIS_PTYPE_KWAY;
   params->objtype       = -1;
+  params->modresolution = 1.0;
   params->ctype         = METIS_CTYPE_SHEM;
   params->iptype        = METIS_IPTYPE_GROW;
   params->rtype         = -1;
@@ -255,6 +262,19 @@ params_t *parse_cmdline(int argc, char *argv[])
         if (gk_optarg)
           if ((params->objtype = gk_GetStringID(objtype_options, gk_optarg)) == -1)
             errexit("Invalid option -%s=%s\n", long_options[option_index].name, gk_optarg);
+        break;
+      case METIS_OPTION_MODRESOLUTION:
+        if (gk_optarg) {
+          char *endptr;
+          params->modresolution = strtoreal(gk_optarg, &endptr);
+          if (endptr == gk_optarg || *endptr != '\0' ||
+              params->modresolution != params->modresolution ||
+              params->modresolution < 0.0 ||
+              (double)params->modresolution*
+                  METIS_MODULARITY_RESOLUTION_SCALE > (double)IDX_MAX-0.5)
+            errexit("Invalid option -%s=%s\n",
+                long_options[option_index].name, gk_optarg);
+        }
         break;
       case METIS_OPTION_CTYPE:
         if (gk_optarg)
@@ -346,7 +366,7 @@ params_t *parse_cmdline(int argc, char *argv[])
 
   /* Set the ptype-specific defaults */
   if (params->ptype == METIS_PTYPE_RB) {
-    params->objtype = (params->objtype != -1 ? params->objtype : METIS_OBJTYPE_CUT);
+    params->objtype = (params->objtype != -1 ? params->objtype : METIS_OBJTYPE_MOD);
     params->rtype = METIS_RTYPE_FM;
   }
   if (params->ptype == METIS_PTYPE_KWAY) {
@@ -357,12 +377,13 @@ params_t *parse_cmdline(int argc, char *argv[])
 
   /* Check for invalid parameter combination */
   if (params->ptype == METIS_PTYPE_RB) {
-    if (params->contig)
-      errexit("The -contig option cannot be specified with rb partitioning.\n");
-    if (params->minconn)
-      errexit("The -minconn option cannot be specified with rb partitioning.\n");
-    if (params->objtype != METIS_OBJTYPE_CUT)
-      errexit("Only -objtype=cut can be specified with rb partitioning.\n");
+    if (params->objtype != METIS_OBJTYPE_CUT &&
+        params->objtype != METIS_OBJTYPE_MOD)
+      errexit("Only -objtype=mod or -objtype=cut can be specified with rb partitioning.\n");
+    if (params->objtype == METIS_OBJTYPE_CUT && params->contig)
+      errexit("The -contig option requires modularity when using rb partitioning.\n");
+    if (params->objtype == METIS_OBJTYPE_CUT && params->minconn)
+      errexit("The -minconn option requires modularity when using rb partitioning.\n");
   }
 
   return params;

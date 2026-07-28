@@ -38,7 +38,7 @@ void ComputePartitionInfo(params_t *params, graph_t *graph, idx_t *where)
   /* Compute objective-related information */
   printf(" - Edgecut: %"PRIDX", communication volume: %"PRIDX", modularity: %.6"PRREAL".\n\n", 
       ComputeCut(graph, where), ComputeVolume(graph, where),
-      ComputeModularity(graph, nparts, where));
+      ComputeModularity(graph, nparts, where, params->modresolution));
 
 
   /* Compute constraint-related information */

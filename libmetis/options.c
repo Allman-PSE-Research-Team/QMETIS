@@ -28,7 +28,7 @@ ctrl_t *SetupCtrl(moptype_et optype, idx_t *options, idx_t ncon, idx_t nparts,
 
   switch (optype) {
     case METIS_OP_PMETIS:
-      ctrl->objtype = GETOPTION(options, METIS_OPTION_OBJTYPE, METIS_OBJTYPE_CUT);
+      ctrl->objtype = GETOPTION(options, METIS_OPTION_OBJTYPE, METIS_OBJTYPE_MOD);
       ctrl->rtype   = METIS_RTYPE_FM;
       ctrl->ncuts   = GETOPTION(options, METIS_OPTION_NCUTS,   1);
       ctrl->niter   = GETOPTION(options, METIS_OPTION_NITER,   10);
@@ -86,6 +86,10 @@ ctrl_t *SetupCtrl(moptype_et optype, idx_t *options, idx_t ncon, idx_t nparts,
   ctrl->dbglvl    = GETOPTION(options, METIS_OPTION_DBGLVL, 0);
   ctrl->numflag   = GETOPTION(options, METIS_OPTION_NUMBERING, 0);
   ctrl->dropedges = GETOPTION(options, METIS_OPTION_DROPEDGES, 0);
+  ctrl->modresolution =
+      (real_t)GETOPTION(options, METIS_OPTION_MODRESOLUTION,
+          METIS_MODULARITY_RESOLUTION_SCALE)/
+      (real_t)METIS_MODULARITY_RESOLUTION_SCALE;
 
   /* set non-option information */
   ctrl->optype  = optype;
@@ -189,6 +193,7 @@ void PrintCtrl(ctrl_t *ctrl)
       break;
     case METIS_OBJTYPE_MOD:
       printf("METIS_OBJTYPE_MOD\n");
+      printf("   Modularity resolution: %.6"PRREAL"\n", ctrl->modresolution);
       break;
     default:
       printf("Unknown!\n");
@@ -302,6 +307,12 @@ int CheckParams(ctrl_t *ctrl)
   real_t sum;
   mdbglvl_et  dbglvl=METIS_DBG_INFO;
 
+  if (ctrl->objtype == METIS_OBJTYPE_MOD && ctrl->modresolution < 0.0) {
+    IFSET(dbglvl, METIS_DBG_INFO,
+        printf("Input Error: Modularity resolution must be non-negative.\n"));
+    return 0;
+  }
+
   switch (ctrl->optype) {
     case METIS_OP_PMETIS:
       if (ctrl->objtype != METIS_OBJTYPE_CUT) {
@@ -382,7 +393,9 @@ int CheckParams(ctrl_t *ctrl)
         IFSET(dbglvl, METIS_DBG_INFO, printf("Input Error: Incorrect coarsening scheme.\n"));
         return 0;
       }
-      if (ctrl->iptype != METIS_IPTYPE_METISRB && ctrl->iptype != METIS_IPTYPE_GROW) {
+      if (ctrl->iptype != METIS_IPTYPE_METISRB &&
+          ctrl->iptype != METIS_IPTYPE_GROW &&
+          ctrl->iptype != METIS_IPTYPE_RANDOM) {
         IFSET(dbglvl, METIS_DBG_INFO, printf("Input Error: Incorrect initial partitioning scheme.\n"));
         return 0;
       }

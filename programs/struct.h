@@ -51,6 +51,7 @@ typedef struct {
   idx_t pfactor;
   idx_t compress;
   idx_t ccorder;
+  real_t modresolution;
 
   char *filename;
   char *outfile;

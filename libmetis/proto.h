@@ -81,8 +81,10 @@ void MoveGroupContigForVol(ctrl_t *ctrl, graph_t *graph, idx_t to, idx_t gid,
 /* debug.c */
 idx_t ComputeCut(graph_t *graph, idx_t *where);
 idx_t ComputeVolume(graph_t *, idx_t *);
-real_t ComputeModularity(graph_t *graph, idx_t nparts, idx_t *where);
-idx_t ComputeModularityObjective(graph_t *graph, idx_t nparts, idx_t *where);
+real_t ComputeModularity(graph_t *graph, idx_t nparts, idx_t *where,
+         real_t resolution);
+idx_t ComputeModularityObjective(graph_t *graph, idx_t nparts, idx_t *where,
+         real_t resolution);
 idx_t ScaleModularityObjective(real_t modularity);
 idx_t ComputeMaxCut(graph_t *graph, idx_t nparts, idx_t *where);
 idx_t CheckBnd(graph_t *);
