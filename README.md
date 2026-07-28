@@ -93,6 +93,12 @@ detection routine even when both use the same formula. The `vsize` array does
 not affect modularity and remains relevant only to the communication-volume
 objective.
 
+> **TODO: Balance-limit robustness.** QMETIS and stock METIS can return a
+> partition above `ubvec` when discrete vertex weights or other constraints
+> make the requested bound infeasible, and local repair may sometimes miss a
+> feasible bound. Add feasibility diagnostics and strengthen final balance
+> repair in a future change without discarding the existing constraints.
+
 Modularity optimization is heuristic and does not guarantee the global
 maximum. Candidate moves primarily target neighboring parts to preserve
 METIS's efficient local-refinement model, and the objective inherits the
