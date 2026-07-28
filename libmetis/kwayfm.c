@@ -12,8 +12,8 @@
 
 
 
-static real_t KWayModularityMoveGain(graph_t *graph, idx_t from, idx_t to,
-         idx_t id, idx_t vdeg, idx_t toed)
+static real_t KWayModularityMoveGain(ctrl_t *ctrl, graph_t *graph, idx_t from,
+         idx_t to, idx_t id, idx_t vdeg, idx_t toed)
 {
   double totaladjwgt;
 
@@ -22,6 +22,7 @@ static real_t KWayModularityMoveGain(graph_t *graph, idx_t from, idx_t to,
     return 0.0;
 
   return (real_t)(2.0*((double)toed-(double)id)/totaladjwgt -
+      (double)ctrl->modresolution*
       (2.0*(double)vdeg*((double)graph->pdeg[to]-(double)graph->pdeg[from]) +
        2.0*(double)vdeg*(double)vdeg)/(totaladjwgt*totaladjwgt));
 }
@@ -47,8 +48,8 @@ static real_t KWayModularityVertexGain(ctrl_t *ctrl, graph_t *graph, idx_t i)
   bestgain = -REAL_MAX;
 
   for (k=0; k<myrinfo->nnbrs; k++) {
-    gain = KWayModularityMoveGain(graph, from, mynbrs[k].pid, myrinfo->id,
-               vdeg, mynbrs[k].ed);
+    gain = KWayModularityMoveGain(ctrl, graph, from, mynbrs[k].pid,
+               myrinfo->id, vdeg, mynbrs[k].ed);
     if (gain > bestgain)
       bestgain = gain;
   }
@@ -275,7 +276,8 @@ static void Greedy_KWayModularityOptimize(ctrl_t *ctrl, graph_t *graph,
         if (!safetos[to=mynbrs[k].pid])
           continue;
 
-        gain = KWayModularityMoveGain(graph, from, to, myrinfo->id, vdeg, mynbrs[k].ed);
+        gain = KWayModularityMoveGain(ctrl, graph, from, to, myrinfo->id,
+                   vdeg, mynbrs[k].ed);
 
         if (omode == OMODE_REFINE) {
           if (!(gain > 0.0 &&

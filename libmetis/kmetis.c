@@ -68,10 +68,17 @@ int METIS_PartGraphKway(idx_t *nvtxs, idx_t *ncon, idx_t *xadj, idx_t *adjncy,
   IFSET(ctrl->dbglvl, METIS_DBG_TIME, gk_startcputimer(ctrl->TotalTmr));
 
   iset(*nvtxs, 0, part);
-  if (ctrl->dbglvl&512)
-    *objval = (*nparts == 1 ? 0 : BlockKWayPartitioning(ctrl, graph, part));
-  else
-    *objval = (*nparts == 1 ? 0 : MlevelKWayPartitioning(ctrl, graph, part));
+  if (*nparts == 1) {
+    *objval = (ctrl->objtype == METIS_OBJTYPE_MOD ?
+        ComputeModularityObjective(graph, 1, part, ctrl->modresolution) : 0);
+    FreeGraph(&graph);
+  }
+  else if (ctrl->dbglvl&512) {
+    *objval = BlockKWayPartitioning(ctrl, graph, part);
+  }
+  else {
+    *objval = MlevelKWayPartitioning(ctrl, graph, part);
+  }
 
   IFSET(ctrl->dbglvl, METIS_DBG_TIME, gk_stopcputimer(ctrl->TotalTmr));
   IFSET(ctrl->dbglvl, METIS_DBG_TIME, PrintTimers(ctrl));
@@ -143,7 +150,8 @@ idx_t MlevelKWayPartitioning(ctrl_t *ctrl, graph_t *graph, idx_t *part)
         break;
 
       case METIS_OBJTYPE_MOD:
-        curobj = ComputeModularityObjective(graph, ctrl->nparts, graph->where);
+        curobj = ComputeModularityObjective(graph, ctrl->nparts, graph->where,
+            ctrl->modresolution);
         break;
 
       default:
@@ -168,7 +176,8 @@ idx_t MlevelKWayPartitioning(ctrl_t *ctrl, graph_t *graph, idx_t *part)
   }
 
   if (ctrl->objtype == METIS_OBJTYPE_MOD)
-    bestobj = ComputeModularityObjective(graph, ctrl->nparts, part);
+    bestobj = ComputeModularityObjective(graph, ctrl->nparts, part,
+        ctrl->modresolution);
 
   FreeGraph(&graph);
 
@@ -191,6 +200,9 @@ void InitKWayPartitioning(ctrl_t *ctrl, graph_t *graph)
   //options[METIS_OPTION_NITER]     = 10;
   options[METIS_OPTION_NITER]     = ctrl->niter;
   options[METIS_OPTION_OBJTYPE]   = METIS_OBJTYPE_CUT;
+  if (ctrl->iptype == METIS_IPTYPE_GROW ||
+      ctrl->iptype == METIS_IPTYPE_RANDOM)
+    options[METIS_OPTION_IPTYPE] = ctrl->iptype;
   options[METIS_OPTION_NO2HOP]    = ctrl->no2hop;
   options[METIS_OPTION_ONDISK]    = ctrl->ondisk;
   options[METIS_OPTION_DROPEDGES] = ctrl->dropedges;
@@ -330,7 +342,8 @@ idx_t BlockKWayPartitioning(ctrl_t *ctrl, graph_t *graph, idx_t *part)
   WCOREPOP;
 
   return (ctrl->objtype == METIS_OBJTYPE_MOD ?
-      ComputeModularityObjective(graph, ctrl->nparts, part) : ComputeCut(graph, part));
+      ComputeModularityObjective(graph, ctrl->nparts, part,
+          ctrl->modresolution) : ComputeCut(graph, part));
 }
 
 

@@ -176,6 +176,7 @@ typedef struct ctrl_t {
   idx_t nparts;                 /*!< The number of partitions */
 
   real_t pfactor;		/* .1*(user-supplied prunning factor) */
+  real_t modresolution;         /*!< Newman-Girvan modularity resolution gamma */
 
   real_t *ubfactors;            /*!< The per-constraint ubfactors */
   

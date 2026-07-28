@@ -43,7 +43,7 @@ void ComputePartitionInfoBipartite(graph_t *graph, idx_t nparts, idx_t *where)
 
   printf("%"PRIDX"-way Cut: %5"PRIDX", Vol: %5"PRIDX", Mod: %.6"PRREAL", ",
       nparts, ComputeCut(graph, where), ComputeVolume(graph, where),
-      ComputeModularity(graph, nparts, where));
+      ComputeModularity(graph, nparts, where, 1.0));
 
   /* Compute balance information */
   kpwgts = ismalloc(ncon*nparts, 0, "ComputePartitionInfo: kpwgts");

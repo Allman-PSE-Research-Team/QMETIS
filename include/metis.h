@@ -163,7 +163,10 @@ typedef __int64 int64_t;
 #define METIS_NOPTIONS          40
 
 /* Modularity is returned through idx_t objval as Q*METIS_MODULARITY_SCALE. */
-#define METIS_MODULARITY_SCALE  1000000
+#define METIS_MODULARITY_SCALE             1000000
+
+/* METIS_OPTION_MODRESOLUTION stores gamma using this fixed-point scale. */
+#define METIS_MODULARITY_RESOLUTION_SCALE  1000000
 
 
 
@@ -188,12 +191,12 @@ extern "C" {
 METIS_API(int) METIS_PartGraphRecursive(idx_t *nvtxs, idx_t *ncon, idx_t *xadj, 
                   idx_t *adjncy, idx_t *vwgt, idx_t *vsize, idx_t *adjwgt, 
                   idx_t *nparts, real_t *tpwgts, real_t *ubvec, idx_t *options, 
-                  idx_t *edgecut, idx_t *part);
+                  idx_t *objval, idx_t *part);
 
 METIS_API(int) METIS_PartGraphKway(idx_t *nvtxs, idx_t *ncon, idx_t *xadj, 
                   idx_t *adjncy, idx_t *vwgt, idx_t *vsize, idx_t *adjwgt, 
                   idx_t *nparts, real_t *tpwgts, real_t *ubvec, idx_t *options, 
-                  idx_t *edgecut, idx_t *part);
+                  idx_t *objval, idx_t *part);
 
 METIS_API(int) METIS_MeshToDual(idx_t *ne, idx_t *nn, idx_t *eptr, idx_t *eind, 
                   idx_t *ncommon, idx_t *numflag, idx_t **r_xadj, idx_t **r_adjncy);
@@ -295,7 +298,11 @@ typedef enum {
   METIS_OPTION_NOOUTPUT,
   METIS_OPTION_BALANCE,
   METIS_OPTION_GTYPE,
-  METIS_OPTION_UBVEC
+  METIS_OPTION_UBVEC,
+
+  /*! Newman-Girvan resolution gamma, encoded as
+      round(gamma*METIS_MODULARITY_RESOLUTION_SCALE). The default is gamma=1. */
+  METIS_OPTION_MODRESOLUTION
 } moptions_et;
 
 

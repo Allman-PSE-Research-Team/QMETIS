@@ -61,6 +61,9 @@ int main(int argc, char *argv[])
   options[METIS_OPTION_SEED]    = params->seed;
   options[METIS_OPTION_NITER]   = params->niter;
   options[METIS_OPTION_NCUTS]   = params->ncuts;
+  options[METIS_OPTION_MODRESOLUTION] =
+      (idx_t)((double)params->modresolution*
+          METIS_MODULARITY_RESOLUTION_SCALE + 0.5);
 
 
   gk_malloc_init();
@@ -148,6 +151,8 @@ void MPPrintInfo(params_t *params, mesh_t *mesh)
 
   printf(" seed=%"PRIDX", niter=%"PRIDX", ncuts=%"PRIDX"\n", 
       params->seed, params->niter, params->ncuts);
+  if (params->objtype == METIS_OBJTYPE_MOD)
+    printf(" resolution=%.6"PRREAL"\n", params->modresolution);
 
   printf(" gtype=%s, ncommon=%"PRIDX", niter=%"PRIDX", ncuts=%"PRIDX"\n", 
       gtypenames[params->gtype], params->ncommon, params->niter, params->ncuts);

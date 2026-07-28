@@ -88,6 +88,9 @@ int main(int argc, char *argv[])
   options[METIS_OPTION_NCUTS]     = params->ncuts;
   options[METIS_OPTION_UFACTOR]   = params->ufactor;
   options[METIS_OPTION_DBGLVL]    = params->dbglvl;
+  options[METIS_OPTION_MODRESOLUTION] =
+      (idx_t)((double)params->modresolution*
+          METIS_MODULARITY_RESOLUTION_SCALE + 0.5);
 
   gk_malloc_init();
   gk_startcputimer(params->parttimer);
@@ -202,6 +205,8 @@ void GPPrintInfo(params_t *params, graph_t *graph)
 
   printf(" seed=%"PRIDX", niparts=%"PRIDX", niter=%"PRIDX", ncuts=%"PRIDX"\n", 
       params->seed, params->niparts, params->niter, params->ncuts);
+  if (params->objtype == METIS_OBJTYPE_MOD)
+    printf(" resolution=%.6"PRREAL"\n", params->modresolution);
 
   if (params->ubvec) {
     printf(" ubvec=(");

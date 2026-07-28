@@ -1,9 +1,106 @@
-# QMETIS 
+# QMETIS
 
-QMETIS is a modularity-default fork of METIS for partitioning graphs, partitioning finite element meshes, 
-and producing fill reducing orderings for sparse matrices. The algorithms implemented in upstream 
-METIS are based on the multilevel recursive-bisection, multilevel k-way, and multi-constraint 
-partitioning schemes developed in our lab.
+QMETIS is a modularity-default fork of METIS for partitioning graphs, partitioning finite element meshes,
+and producing fill reducing orderings for sparse matrices. The algorithms implemented in upstream
+METIS are based on the multilevel recursive-bisection, multilevel k-way, and multi-constraint
+partitioning schemes developed in the Karypis lab.
+
+## Modularity objective and resolution
+
+Both `METIS_PartGraphKway` and `METIS_PartGraphRecursive` maximize weighted
+Newman-Girvan modularity by default:
+
+```text
+Q(gamma) = sum_c [L_c/m - gamma*(d_c/(2m))^2]
+```
+
+Here, `L_c` is the weight of edges internal to part `c`, `d_c` is the sum of
+weighted degrees in that part, `m` is the total undirected edge weight, and
+`gamma` is the modularity resolution. The default is `gamma=1`. Lower values
+favor larger communities and higher values favor smaller communities.
+For the same weighted undirected graph, partition, and resolution, this is the
+same convention used by
+`networkx.community.modularity(G, communities, weight="weight",
+resolution=gamma)`. A self-loop contributes its weight once to `L_c` and twice
+to the weighted degree if one is present, although the canonical METIS graph
+format treats self-edges as invalid and callers should normally remove them.
+
+Modularity is a global objective. The recursive entry point therefore uses
+recursive bisection to construct a balanced initial partition and then applies
+global k-way modularity refinement against the original graph. It does not
+optimize independently normalized modularity on each recursive subgraph.
+Target partition weights, multi-constraint balancing, imbalance limits,
+contiguity, and minimum-connectivity handling remain active during the global
+refinement.
+
+The public METIS options array stores integers, so QMETIS represents `gamma`
+as a fixed-point value with six decimal places:
+
+```c
+idx_t options[METIS_NOPTIONS];
+METIS_SetDefaultOptions(options);
+options[METIS_OPTION_MODRESOLUTION] =
+    (idx_t)(1.25 * METIS_MODULARITY_RESOLUTION_SCALE + 0.5);
+```
+
+This example requests `gamma=1.25`. The option must be non-negative and fit in
+the configured `idx_t`. Leaving it unset uses
+`METIS_MODULARITY_RESOLUTION_SCALE`, which represents `gamma=1`.
+
+Existing wrappers remain binary compatible because function signatures and
+the `METIS_*` symbols are unchanged. A wrapper that does not know the new
+option still gets `gamma=1`. To configure another value, extend the wrapper's
+option enum with `METIS_OPTION_MODRESOLUTION` from `qmetis.h`, then store
+`round(gamma*METIS_MODULARITY_RESOLUTION_SCALE)` in that options slot.
+
+To request the original recursive edge-cut algorithm, set:
+
+```c
+options[METIS_OPTION_OBJTYPE] = METIS_OBJTYPE_CUT;
+```
+
+`METIS_OBJTYPE_CUT` and `METIS_OBJTYPE_VOL` also remain available through the
+K-way API. Modularity returned through `objval` is
+`round(Q*METIS_MODULARITY_SCALE)`, where
+`METIS_MODULARITY_SCALE` is `1000000`. For example, `objval=423817` represents
+`Q=0.423817`. Wrappers that return `(objval, parts)` therefore return scaled
+modularity in the first element, rather than the edge-cut or communication
+volume returned by stock METIS. QMETIS recomputes modularity over the complete
+selected partition before producing this value.
+
+The command-line programs are installed as `qgpmetis`, `qmpmetis`,
+`qndmetis`, `qm2gmetis`, `qgraphchk`, and `qcmpfillin` to avoid confusion with
+stock METIS executables. `qgpmetis` and `qmpmetis` accept `-objtype=mod` and a
+decimal `-resolution=<gamma>`; modularity with `gamma=1` is already their
+default graph-partitioning objective.
+
+### Input, constraints, and optimization semantics
+
+Like METIS, QMETIS expects an undirected graph encoded as symmetric CSR
+adjacency. Graph edge and vertex weights are integer `idx_t` values; arbitrary
+floating-point or negative graph weights are not accepted directly. Fractional
+non-negative edge weights can be represented by multiplying all edge weights
+by one common positive factor and converting them exactly to integers. Uniform
+scaling does not change mathematical modularity, but the scaled values must fit
+the configured `IDXTYPEWIDTH`, and approximate rounding can change the graph.
+
+QMETIS returns exactly the requested `nparts`; it does not choose the number of
+communities. Vertex and multi-constraint weights, target partition weights,
+imbalance limits, contiguity, and minimum-connectivity settings remain active.
+Restoring balance may require a move that reduces modularity. Consequently, a
+QMETIS result can have lower modularity than an unconstrained community
+detection routine even when both use the same formula. The `vsize` array does
+not affect modularity and remains relevant only to the communication-volume
+objective.
+
+Modularity optimization is heuristic and does not guarantee the global
+maximum. Candidate moves primarily target neighboring parts to preserve
+METIS's efficient local-refinement model, and the objective inherits the
+standard modularity resolution limit.
+
+`METIS_NodeND` and the separator and ordering algorithms retain their original
+node-separator objectives; the modularity default applies only to the graph
+partitioning entry points described above.
 
 ##  Downloading QMETIS
 
@@ -45,8 +142,8 @@ Pushing a tag beginning with `v` or `qmetis-v` builds the same matrix and
 attaches all archives plus a top-level `SHA256SUMS` file to a GitHub Release:
 
 ```bash
-git tag qmetis-v5.2.1-modularity.1
-git push origin qmetis-v5.2.1-modularity.1
+git tag qmetis-v5.2.1-modularity.X
+git push origin qmetis-v5.2.1-modularity.X
 ```
 
 These archives can be embedded as native resources in a larger Python
@@ -224,8 +321,8 @@ Remove-Item -LiteralPath .\build\windows -Recurse -Force
                         ~/local/lib64. You can skip this if GKlib's installation prefix
                         is the same as that of QMETIS.
     i64=1             - Sets to 64 bits the width of the datatype that will store information
-                        about the vertices and their adjacency lists. 
-    r64=1             - Sets to 64 bits the width of the datatype that will store information 
+                        about the vertices and their adjacency lists.
+    r64=1             - Sets to 64 bits the width of the datatype that will store information
                         about floating point numbers.
 
 Direct CMake builds use `-DIDXTYPEWIDTH=32|64` and
