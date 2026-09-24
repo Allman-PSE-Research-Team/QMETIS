@@ -49,6 +49,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Install CPU emulator
+        if: matrix.platform == 'linux-x86_64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user
       - name: Build, verify, and package
         env:
           QMETIS_PLATFORM: ${{ matrix.platform }}
@@ -121,6 +126,12 @@ jobs:
             echo "IDXTYPEWIDTH=$QMETIS_IDXTYPEWIDTH"
             echo "REALTYPEWIDTH=$QMETIS_REALTYPEWIDTH"
             echo "BUILD_TYPE=Release"
+            echo "ARM64_BUILD_INFO_BEGIN"
+            cat "$arm_dir/BUILD-INFO.txt"
+            echo "ARM64_BUILD_INFO_END"
+            echo "X86_64_BUILD_INFO_BEGIN"
+            cat "$intel_dir/BUILD-INFO.txt"
+            echo "X86_64_BUILD_INFO_END"
           } > "$package_dir/BUILD-INFO.txt"
           test "$(lipo -archs "$package_dir/lib/libqmetis.dylib")" = "x86_64 arm64" || \
             test "$(lipo -archs "$package_dir/lib/libqmetis.dylib")" = "arm64 x86_64"
@@ -160,9 +171,32 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t archives < <(find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) | sort)
-          test "${#archives[@]}" -ge 5
-          sha256sum "${archives[@]}" > SHA256SUMS
+          test "${#archives[@]}" -eq 5
+          expected=(
+            "qmetis-5.2.1-linux-x86_64-idx${QMETIS_IDXTYPEWIDTH}-real${QMETIS_REALTYPEWIDTH}.tar.gz"
+            "qmetis-5.2.1-windows-x86_64-idx${QMETIS_IDXTYPEWIDTH}-real${QMETIS_REALTYPEWIDTH}.zip"
+            "qmetis-5.2.1-macos-arm64-idx${QMETIS_IDXTYPEWIDTH}-real${QMETIS_REALTYPEWIDTH}.tar.gz"
+            "qmetis-5.2.1-macos-x86_64-idx${QMETIS_IDXTYPEWIDTH}-real${QMETIS_REALTYPEWIDTH}.tar.gz"
+            "qmetis-5.2.1-macos-universal2-idx${QMETIS_IDXTYPEWIDTH}-real${QMETIS_REALTYPEWIDTH}.tar.gz"
+          )
+          for filename in "${expected[@]}"; do
+            matches=0
+            for archive in "${archives[@]}"; do
+              [[ "$(basename "$archive")" == "$filename" ]] && ((matches += 1))
+            done
+            test "$matches" -eq 1
+          done
+          : > SHA256SUMS
+          for archive in "${archives[@]}"; do
+            printf '%s  %s\n' "$(sha256sum "$archive" | cut -d ' ' -f 1)" "$(basename "$archive")" >> SHA256SUMS
+          done
+          {
+            echo "Release tag: \`$TAG\`"
+            echo '```text'
+            cat SHA256SUMS
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --generate-notes --verify-tag
           fi
-          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber "${archives[@]}" SHA256SUMS
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" "${archives[@]}" SHA256SUMS

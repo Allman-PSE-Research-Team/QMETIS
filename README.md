@@ -93,6 +93,12 @@ detection routine even when both use the same formula. The `vsize` array does
 not affect modularity and remains relevant only to the communication-volume
 objective.
 
+> **TODO: Balance-limit robustness.** QMETIS and stock METIS can return a
+> partition above `ubvec` when discrete vertex weights or other constraints
+> make the requested bound infeasible, and local repair may sometimes miss a
+> feasible bound. Add feasibility diagnostics and strengthen final balance
+> repair in a future change without discarding the existing constraints.
+
 Modularity optimization is heuristic and does not guarantee the global
 maximum. Candidate moves primarily target neighboring parts to preserve
 METIS's efficient local-refinement model, and the objective inherits the
@@ -129,9 +135,12 @@ qmetis-5.2.1-macos-universal2-idx64-real32.tar.gz
 
 Every package includes the primary `qmetis` library, the filename-compatible
 `metis` library, configured headers, licenses, build metadata, and SHA-256
-checksums. CI loads each primary library and calls `METIS_PartGraphKway` before
-publishing it. The universal macOS dylib is assembled from separately built
-native ARM64 and Intel artifacts and is checked with `lipo`.
+checksums. CI tests the packaged library's default options, k-way and recursive
+modularity partitioning, and resolution settings. Linux is tested again under
+QEMU's Nehalem CPU model, which has no AVX or AVX-512. The workflow audits
+GKlib and QMETIS compile commands for host-specific CPU flags and records the
+effective settings in `BUILD-INFO.txt`. Intel builds target the x86-64 baseline;
+the universal macOS dylib combines the separately built ARM64 and Intel slices.
 
 To build artifacts without creating a release, open **Actions**, select
 **Native libraries**, choose **Run workflow**, and select the desired integer
@@ -145,6 +154,10 @@ attaches all archives plus a top-level `SHA256SUMS` file to a GitHub Release:
 git tag qmetis-v5.2.1-modularity.X
 git push origin qmetis-v5.2.1-modularity.X
 ```
+
+Use `qmetis-v5.2.1-modularity.3` for the CPU portability correction. Keep all
+five platform archives under that tag and use its top-level `SHA256SUMS` to
+update downstream asset hashes. Do not reuse the `.1` or `.2` release assets.
 
 These archives can be embedded as native resources in a larger Python
 package. The larger package must publish platform-specific wheels, or a

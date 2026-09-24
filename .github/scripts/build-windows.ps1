@@ -11,6 +11,11 @@ if (-not $sourceDir -or -not $tempDir -or -not $idxWidth -or -not $realWidth -or
     throw "Required CI environment variables are missing"
 }
 
+# Keep inherited MSVC and CMake environment flags out of release builds.
+foreach ($name in @("CFLAGS", "CPPFLAGS", "CXXFLAGS", "LDFLAGS", "CL", "_CL_")) {
+    [Environment]::SetEnvironmentVariable($name, $null, "Process")
+}
+
 $depsDir = Join-Path $tempDir "qmetis-deps"
 $gklibSource = Join-Path $depsDir "GKlib"
 $gklibBuild = Join-Path $depsDir "gklib-build"
@@ -31,6 +36,8 @@ git clone --quiet https://github.com/KarypisLab/GKlib.git $gklibSource
 git -C $gklibSource checkout --quiet $gklibRef
 
 cmake -S $gklibSource -B $gklibBuild -A x64 `
+    -DCMAKE_C_FLAGS= `
+    -DGKLIB_BUILD_APPS=OFF `
     -DCMAKE_INSTALL_PREFIX="$prefix"
 if ($LASTEXITCODE -ne 0) { throw "GKlib configure failed" }
 cmake --build $gklibBuild --config Release --parallel
@@ -39,6 +46,8 @@ cmake --install $gklibBuild --config Release
 if ($LASTEXITCODE -ne 0) { throw "GKlib install failed" }
 
 cmake -S $sourceDir -B $qmetisBuild -A x64 `
+    -DCMAKE_C_FLAGS= `
+    -DQMETIS_PORTABLE_X86_64=ON `
     -DCMAKE_INSTALL_PREFIX="$prefix" `
     -DGKLIB_PATH="$prefix" `
     -DSHARED=ON `
@@ -72,6 +81,9 @@ if ($compilerConfig) {
     if ($versionMatch) { $compilerVersion = $versionMatch.Matches[0].Groups[1].Value }
 }
 $compiler = "MSVC $compilerVersion"
+$cpuBuildInfo = (python (Join-Path $sourceDir ".github\scripts\check_cpu_target.py") `
+    "windows-x86_64" $gklibBuild $qmetisBuild) -join [Environment]::NewLine
+if ($LASTEXITCODE -ne 0) { throw "CPU target audit failed" }
 @"
 QMETIS_COMMIT=$qmetisCommit
 GKLIB_COMMIT=$gklibCommit
@@ -80,6 +92,7 @@ IDXTYPEWIDTH=$idxWidth
 REALTYPEWIDTH=$realWidth
 BUILD_TYPE=Release
 COMPILER=$compiler
+$cpuBuildInfo
 "@ | Set-Content -LiteralPath (Join-Path $packageDir "BUILD-INFO.txt") -Encoding ascii
 
 python (Join-Path $sourceDir ".github\scripts\verify_library.py") `
