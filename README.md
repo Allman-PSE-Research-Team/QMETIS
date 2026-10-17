@@ -362,7 +362,7 @@ ABI. Add `-DQMETIS_BUILD_PROGRAMS=OFF` when only the native library is needed.
 
 
 ## Copyright & License Notice
-Copyright 1998-2020, Regents of the University of Minnesota
+Copyright 1998-2020, Regents of the University of Minnesota.\
 Copyright (c) 2026 The Regents of the University of Michigan.
 All rights reserved.
 
